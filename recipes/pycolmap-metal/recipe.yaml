@@ -42,7 +42,7 @@ requirements:
     - python
     - scikit-build
     - scikit-build-core
-    - pybind11
+    - pybind11 >=3.1
     # the fork needs pybind11 3.1 (pybind11-abi 12); conda-forge pyceres is abi 11
     - pybind11-abi
     - pybind11-stubgen
