@@ -1,0 +1,107 @@
+# pycolmap for the Metal COLMAP build (Tobias-Fischer/colmap fork) on osx-arm64.
+# Built against the already published colmap metal_h1ea394c_0 package (same source
+# rev), so COLMAP itself is not recompiled; adapted from the conda-forge colmap
+# feedstock's pycolmap output (4.2.1 build 6: Qt 6, pybind11-abi).
+schema_version: 1
+
+context:
+  version: "4.3.0.dev0"
+  build_number: 0
+  colmap_build: metal_h1ea394c_0
+
+package:
+  name: pycolmap
+  version: ${{ version }}
+
+source:
+  git: https://github.com/Tobias-Fischer/colmap
+  rev: a60cce32730513b1cfef0a32632dc171a9cb8089
+
+build:
+  number: ${{ build_number }}
+  string: metal_py${{ python | version_to_buildstring }}h${{ hash }}_${{ build_number }}
+  skip: not (osx and arm64)
+  script:
+    # same as the feedstock's bump-min-cmake.patch
+    - sed -i.bak 's/cmake_minimum_required(VERSION 3.10)/cmake_minimum_required(VERSION 3.31)/' python/CMakeLists.txt
+    - export CXXFLAGS="${CXXFLAGS} -D_LIBCPP_DISABLE_AVAILABILITY -I${PREFIX}/include/onnxruntime/core/session"
+    - export CMAKE_BUILD_PARALLEL_LEVEL=${CPU_COUNT}
+    - ${{ PYTHON }} -m pip install . -vv --no-build-isolation --no-deps
+
+requirements:
+  build:
+    - ${{ compiler('cxx') }}
+    - ${{ compiler('c') }}
+    - ${{ stdlib("c") }}
+    - cmake
+    - make
+    - ninja
+    - llvm-openmp
+  host:
+    - pip
+    - python
+    - scikit-build
+    - scikit-build-core
+    - pybind11
+    # the fork needs pybind11 3.1 (pybind11-abi 12); conda-forge pyceres is abi 11
+    - pybind11-abi
+    - pybind11-stubgen
+    - numpy
+    - ruff
+    - black
+    - isort
+    - libboost-devel
+    # the published Metal colmap (tobiasrobotics channel), static libs + cmake config
+    - colmap ==${{ version }} ${{ colmap_build }}
+    - ceres-solver * [build="cpu*"]
+    - libfaiss * [build="*_cpu"]
+    - faiss * [build="*_cpu"]
+    - eigen
+    - eigen-abi-devel
+    - libblas
+    - libcblas
+    - cgal-cpp
+    - sqlite
+    - flann
+    - glog
+    - gflags
+    - freeimage
+    - metis
+    - ceres-solver
+    - glew
+    - vlfeat
+    - gmp
+    - qt6-main <6.11.3  # same Qt as the colmap metal build (pyside6 6.11.2)
+    - lz4-c
+    - fmt
+    - libfaiss
+    - poselib
+    - libopenimageio
+    - onnxruntime
+    - onnxruntime-cpp
+    - llvm-openmp
+    - xorg-libx11
+    - xorg-libxext
+  run:
+    - python
+    - numpy
+    - colmap ==${{ version }} metal_*
+  ignore_run_exports:
+    by_name:
+      - fmt
+
+tests:
+  - python:
+      imports:
+        - pycolmap
+      pip_check: false
+  - script:
+      - python -c "import pycolmap; r = pycolmap.Reconstruction(); x = r.points3D; print(pycolmap.COLMAP_build)"
+      - python -c "import pycolmap; assert 'Metal' in pycolmap.COLMAP_build, pycolmap.COLMAP_build; assert hasattr(pycolmap, 'patch_match_stereo')"
+
+about:
+  license: BSD-3-Clause
+  license_file:
+    - LICENSE
+  summary: pycolmap (Python bindings of COLMAP) built with Metal PatchMatch stereo for Apple silicon (Tobias-Fischer/colmap fork).
+  homepage: https://github.com/Tobias-Fischer/colmap

@@ -1,0 +1,130 @@
+From 2a8088a5b22fa6e0b3f26f24558c665e6556d49f Mon Sep 17 00:00:00 2001
+From: Tobias Fischer <tobias.fischer@qut.edu.au>
+Date: Sat, 31 Oct 2026 15:59:27 +1000
+Subject: [PATCH] Viewer: support GLAD 2
+
+Use GLAD 2's CMake package (glad_add_library generates the loader at build
+time) when it is found, and GLAD 1 otherwise. GLAD 1 is no longer developed
+and is missing on some platforms (e.g. conda-forge linux-aarch64).
+---
+ apps/Viewer/BufferObjects.h |  4 ++++
+ apps/Viewer/CMakeLists.txt  | 28 ++++++++++++++++++++++------
+ apps/Viewer/Common.h        |  4 ++++
+ apps/Viewer/OpenGLDebug.h   |  4 ++++
+ apps/Viewer/Window.cpp      |  4 ++++
+ 5 files changed, 38 insertions(+), 6 deletions(-)
+
+diff --git a/apps/Viewer/BufferObjects.h b/apps/Viewer/BufferObjects.h
+index b080d35..6797026 100644
+--- a/apps/Viewer/BufferObjects.h
++++ b/apps/Viewer/BufferObjects.h
+@@ -31,7 +31,11 @@
+ 
+ #pragma once
+ 
++#ifdef _USE_GLAD2
++#include <glad/gl.h>
++#else
+ #include <glad/glad.h>
++#endif
+ 
+ namespace VIEWER {
+ 
+diff --git a/apps/Viewer/CMakeLists.txt b/apps/Viewer/CMakeLists.txt
+index 6d85389..e7c7309 100644
+--- a/apps/Viewer/CMakeLists.txt
++++ b/apps/Viewer/CMakeLists.txt
+@@ -3,12 +3,28 @@ if(NOT VIEWER_NAME)
+ endif()
+ 
+ # Find required packages
+-FIND_PACKAGE(glad QUIET)
+-if(glad_FOUND)
+-	MESSAGE(STATUS "GLAD ${glad_VERSION} found")
++# GLAD 2 (its CMake package generates the loader at build time) or GLAD 1
++FIND_PACKAGE(Glad CONFIG QUIET)
++if(Glad_FOUND AND COMMAND glad_add_library)
++	MESSAGE(STATUS "GLAD 2 found")
++	enable_language(C)
++	# static, linked into the Viewer (glad 2.0.8 ignores STATIC when
++	# BUILD_SHARED_LIBS is ON)
++	set(_BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS})
++	set(BUILD_SHARED_LIBS OFF)
++	glad_add_library(glad_gl STATIC REPRODUCIBLE QUIET API gl:compatibility=4.6)
++	set(BUILD_SHARED_LIBS ${_BUILD_SHARED_LIBS})
++	set(GLAD_LIBRARY glad_gl)
++	add_definitions(-D_USE_GLAD2)
+ else()
+-	MESSAGE("-- Can't find GLAD. Continuing without it.")
+-	RETURN()
++	FIND_PACKAGE(glad QUIET)
++	if(glad_FOUND)
++		MESSAGE(STATUS "GLAD ${glad_VERSION} found")
++		set(GLAD_LIBRARY glad::glad)
++	else()
++		MESSAGE("-- Can't find GLAD. Continuing without it.")
++		RETURN()
++	endif()
+ endif()
+ FIND_PACKAGE(glfw3 QUIET)
+ if(glfw3_FOUND)
+@@ -48,7 +64,7 @@ FILE(GLOB LIBRARY_FILES_H "*.h" "*.inl")
+ FILE(GLOB SHADERS_LIBRARY_FILES "shaders/*.*")
+ SOURCE_GROUP("Shaders" FILES ${SHADERS_LIBRARY_FILES})
+ 
+-cxx_executable_with_flags(${VIEWER_NAME} "Apps" "${cxx_default}" "MVS;glad::glad;${GLFW_STATIC_LIBRARIES};${glfw3_LIBRARY};${GLFW3_LIBRARY};glfw;imgui::imgui" ${LIBRARY_FILES_C} ${LIBRARY_FILES_H} ${SHADERS_LIBRARY_FILES})
++cxx_executable_with_flags(${VIEWER_NAME} "Apps" "${cxx_default}" "MVS;${GLAD_LIBRARY};${GLFW_STATIC_LIBRARIES};${glfw3_LIBRARY};${GLFW3_LIBRARY};glfw;imgui::imgui" ${LIBRARY_FILES_C} ${LIBRARY_FILES_H} ${SHADERS_LIBRARY_FILES})
+ 
+ # On macOS, link Cocoa explicitly for our ObjC++ bridge and disable PCH for .mm
+ if(APPLE)
+diff --git a/apps/Viewer/Common.h b/apps/Viewer/Common.h
+index 2c67e58..5890c5a 100644
+--- a/apps/Viewer/Common.h
++++ b/apps/Viewer/Common.h
+@@ -39,7 +39,11 @@
+ #include "../../libs/MVS/Scene.h"
+ 
+ #define GLAD_GL_IMPLEMENTATION
++#ifdef _USE_GLAD2
++#include <glad/gl.h>
++#else
+ #include <glad/glad.h>
++#endif
+ #define GLFW_INCLUDE_NONE 
+ #include <GLFW/glfw3.h>
+ 
+diff --git a/apps/Viewer/OpenGLDebug.h b/apps/Viewer/OpenGLDebug.h
+index 3f004b6..5f8b2e9 100644
+--- a/apps/Viewer/OpenGLDebug.h
++++ b/apps/Viewer/OpenGLDebug.h
+@@ -37,7 +37,11 @@
+ #include <iostream>
+ #include <string>
+ #include <sstream>
++#ifdef _USE_GLAD2
++#include <glad/gl.h>
++#else
+ #include <glad/glad.h>
++#endif
+ 
+ 
+ // D E F I N E S ///////////////////////////////////////////////////
+diff --git a/apps/Viewer/Window.cpp b/apps/Viewer/Window.cpp
+index 06c1051..000e32d 100644
+--- a/apps/Viewer/Window.cpp
++++ b/apps/Viewer/Window.cpp
+@@ -137,7 +137,11 @@ bool Window::Initialize(const cv::Size& size, const String& windowTitle, Scene&
+ 	glfwMakeContextCurrent(window);
+ 
+ 	// Load OpenGL functions with GLAD
++	#ifdef _USE_GLAD2
++	if (!gladLoadGL(glfwGetProcAddress)) {
++	#else
+ 	if (!gladLoadGL()) {
++	#endif
+ 		DEBUG("Failed to initialize GLAD");
+ 		glfwDestroyWindow(window);
+ 		glfwTerminate();
+-- 
+2.53.0
+

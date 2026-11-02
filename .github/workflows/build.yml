@@ -1,0 +1,133 @@
+# Builds the conda packages in recipes/ for every platform and (on main, if the
+# ANACONDA_API_TOKEN secret exists) uploads them to anaconda.org/tobiasrobotics.
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  RATTLER_BUILD_VERSION: v0.80.0
+  # Everything that is not noarch is built per platform; noarch packages
+  # (vcglib, portable-file-dialogs: needed by OpenMVS everywhere) are built in
+  # each job and de-duplicated by file name when uploading.
+  COMMON: vcglib portable-file-dialogs openmvs py4dgeo qcustomplot dxflib cloudcompare
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {name: linux-64,         os: ubuntu-latest,    out: out, recipes: "$COMMON taglab"}
+          - {name: linux-64-cuda,    os: ubuntu-latest,    out: out, recipes: "vcglib portable-file-dialogs openmvs", cuda: true}
+          - {name: linux-aarch64,    os: ubuntu-24.04-arm, out: out, recipes: "$COMMON"}
+          - {name: osx-arm64,        os: macos-latest,     out: out, recipes: "$COMMON", metal: true}
+          - {name: osx-64,           os: macos-15-intel,   out: out, recipes: "$COMMON"}
+          - {name: win-64,           os: windows-latest,   out: 'C:/rb', recipes: "$COMMON"}
+          - {name: win-64-cuda,      os: windows-latest,   out: 'C:/rb', recipes: "vcglib portable-file-dialogs openmvs", cuda: true}
+    defaults:
+      run:
+        shell: bash
+    env:
+      OUT: ${{ matrix.out }}
+      RECIPES: ${{ matrix.recipes }}
+      RATTLER_CACHE_DIR: ${{ github.workspace }}/../rattler-cache
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Free disk space (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          df -h /
+
+      - name: Install rattler-build
+        run: |
+          case "${{ runner.os }}-${{ runner.arch }}" in
+            Linux-X64)   t=x86_64-unknown-linux-musl; e=;;
+            Linux-ARM64) t=aarch64-unknown-linux-musl; e=;;
+            macOS-ARM64) t=aarch64-apple-darwin; e=;;
+            macOS-X64)   t=x86_64-apple-darwin; e=;;
+            Windows-X64) t=x86_64-pc-windows-msvc; e=.exe;;
+          esac
+          mkdir -p "$HOME/bin"
+          curl -fsSL -o "$HOME/bin/rattler-build$e" \
+            "https://github.com/prefix-dev/rattler-build/releases/download/$RATTLER_BUILD_VERSION/rattler-build-$t$e"
+          chmod +x "$HOME/bin/rattler-build$e"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+          "$HOME/bin/rattler-build$e" --version
+
+      - uses: actions/cache@v6
+        with:
+          path: ${{ github.workspace }}/../rattler-cache
+          key: rattler-${{ matrix.name }}-${{ hashFiles('recipes/**', 'conda_build_config.yaml') }}
+          restore-keys: rattler-${{ matrix.name }}-
+
+      - name: Build
+        env:
+          CF_CUDA_ENABLED: ${{ matrix.cuda && 'True' || 'False' }}
+          # no GPU on the runners: let the solver see a CUDA driver so the
+          # packages' `__cuda` run dependency resolves in their tests (the
+          # recipes skip running GPU tools when there is no driver)
+          CONDA_OVERRIDE_CUDA: ${{ matrix.cuda && '13.4' || '' }}
+        run: |
+          args=()
+          for r in $(eval echo "$RECIPES"); do args+=(-r "recipes/$r"); done
+          rattler-build build "${args[@]}" \
+            --skip-existing all -c conda-forge -c tobiasrobotics \
+            -m conda_build_config.yaml --output-dir "$OUT" \
+            --color-build-log --continue-on-failure
+
+      # Metal COLMAP (macOS arm64 only): own variant files
+      - name: Build colmap and pycolmap with Metal
+        if: matrix.metal
+        run: |
+          rattler-build build -r recipes/colmap-metal \
+            --skip-existing all -c conda-forge -c tobiasrobotics \
+            -m conda_build_config.yaml -m recipes/colmap-metal/variant.yaml --output-dir "$OUT"
+          rattler-build build -r recipes/pycolmap-metal \
+            --skip-existing all -c conda-forge -c tobiasrobotics \
+            -m conda_build_config.yaml -m recipes/pycolmap-metal/python.yaml \
+            -m recipes/pycolmap-metal/variant.yaml --output-dir "$OUT"
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: packages-${{ matrix.name }}
+          path: |
+            ${{ matrix.out }}/**/*.conda
+            ${{ matrix.out }}/**/*.tar.bz2
+          if-no-files-found: warn
+          retention-days: 14
+
+  upload:
+    name: upload to anaconda.org
+    needs: build
+    # upload whatever was built, even if one platform failed
+    if: ${{ !cancelled() && github.event_name != 'pull_request' }}
+    runs-on: ubuntu-latest
+    env:
+      ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: packages-*
+          path: artifacts
+      - name: Upload (skips existing files, never overwrites)
+        run: |
+          if [ -z "$ANACONDA_API_TOKEN" ]; then
+            echo "::notice::ANACONDA_API_TOKEN is not set: nothing uploaded (see README)."
+            exit 0
+          fi
+          bash scripts/upload.sh artifacts
