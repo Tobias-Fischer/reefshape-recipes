@@ -23,6 +23,7 @@ source:
     - patches/0006-Coraline-finds-libcoraline-in-the-conda-environment.patch
     - patches/0007-PySide6-fixes-found-running-the-tools-on-real-images.patch
     - patches/0008-Colour-augmentation-for-albumentations-2.patch
+    - patches/0009-SAM-on-the-Apple-GPU-MPS.patch
 
 build:
   number: 0
