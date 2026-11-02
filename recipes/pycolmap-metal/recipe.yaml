@@ -7,7 +7,7 @@ schema_version: 1
 context:
   version: "4.3.0.dev0"
   build_number: 0
-  colmap_build: metal_h1ea394c_0
+  colmap_build: "metal_*"
 
 package:
   name: pycolmap
