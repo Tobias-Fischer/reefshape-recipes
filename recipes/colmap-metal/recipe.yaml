@@ -15,6 +15,10 @@ recipe:
 source:
   git: https://github.com/Tobias-Fischer/colmap
   rev: a60cce32730513b1cfef0a32632dc171a9cb8089
+  patches:
+    # LGPL flavour: no CHOLMOD (its supernodal parts are GPL); the sparse Cholesky
+    # in rotation averaging then uses Eigen's simplicial solver (conda-forge colmap-feedstock#113)
+    - no-cholmod.patch
 
 
 outputs:
@@ -23,7 +27,7 @@ outputs:
       version: ${{ version }}
     build:
       number: ${{ build_number }}
-      string: metal_h${{ hash }}_${{ build_number }}
+      string: metal_lgpl_h${{ hash }}_${{ build_number }}
       variant:
         use_keys:
           # use cuda from the variant config, e.g. to build multiple CUDA variants
@@ -73,19 +77,17 @@ outputs:
         - libblas
         - libcblas
         - libboost-devel
-        - suitesparse
         - eigen
         - eigen-abi-devel
         - freeimage
         - glog
         - gflags
         - glew
-        - cgal-cpp
         - ceres-solver
         - if: cuda == "enabled"
-          then: ceres-solver * [build="gpu*"]
+          then: ceres-solver * [build="gpulgpl*"]
           else:
-            - ceres-solver * [build="cpu*"]
+            - ceres-solver * [build="cpulgpl*"]
             # avoid pulling the CUDA build of faiss (and with it CUDA) into cpu builds
             - faiss * [build="*_cpu"]
             - libfaiss * [build="*_cpu"]
@@ -99,7 +101,6 @@ outputs:
         - if: unix
           then:
             - vlfeat
-            - gmp
         - lz4-c
         - metis
         # libopenimageio (not the openimageio metapackage) so that its run_exports
@@ -127,6 +128,7 @@ outputs:
             - onnxruntime-cpp
       run:
         - flann
+        - ceres-solver * [build="*lgpl*"]
         - if: cuda == "enabled"
           then:
             - __cuda >=${{ cuda_compiler_version }}  # needed to ensure cuda packages are only installed in cuda environments and fallback to cpu builds otherwise

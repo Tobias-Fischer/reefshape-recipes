@@ -39,6 +39,7 @@ cmake ${CMAKE_ARGS} \
       -DFETCH_FAISS=OFF \
       -DFETCH_POSELIB=OFF \
       -DFETCH_ONNX=OFF \
+      -DCGAL_ENABLED=OFF \
       ${EXTRA_CMAKE_ARGS} \
 ..
 

@@ -7,7 +7,7 @@ schema_version: 1
 context:
   version: "4.3.0.dev0"
   build_number: 0
-  colmap_build: "metal_*"
+  colmap_build: "metal_lgpl_*"
 
 package:
   name: pycolmap
@@ -19,7 +19,7 @@ source:
 
 build:
   number: ${{ build_number }}
-  string: metal_py${{ python | version_to_buildstring }}h${{ hash }}_${{ build_number }}
+  string: metal_lgpl_py${{ python | version_to_buildstring }}h${{ hash }}_${{ build_number }}
   skip: not (osx and arm64)
   script:
     # same as the feedstock's bump-min-cmake.patch
@@ -58,14 +58,13 @@ requirements:
     - libboost-devel
     # the published Metal colmap (reefshape channel), static libs + cmake config
     - colmap ==${{ version }} ${{ colmap_build }}
-    - ceres-solver * [build="cpu*"]
+    - ceres-solver * [build="cpulgpl*"]
     - libfaiss * [build="*_cpu"]
     - faiss * [build="*_cpu"]
     - eigen
     - eigen-abi-devel
     - libblas
     - libcblas
-    - cgal-cpp
     - sqlite
     - flann
     - glog
@@ -75,7 +74,6 @@ requirements:
     - ceres-solver
     - glew
     - vlfeat
-    - gmp
     - qt6-main <6.11.3  # same Qt as the colmap metal build (pyside6 6.11.2)
     - lz4-c
     - fmt
@@ -90,7 +88,8 @@ requirements:
   run:
     - python
     - numpy
-    - colmap ==${{ version }} metal_*
+    - colmap ==${{ version }} metal_lgpl_*
+    - ceres-solver * [build="*lgpl*"]
   ignore_run_exports:
     by_name:
       - fmt
