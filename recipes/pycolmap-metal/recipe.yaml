@@ -24,7 +24,7 @@ build:
   script:
     # same as the feedstock's bump-min-cmake.patch
     - sed -i.bak 's/cmake_minimum_required(VERSION 3.10)/cmake_minimum_required(VERSION 3.31)/' python/CMakeLists.txt
-    - export CXXFLAGS="${CXXFLAGS} -D_LIBCPP_DISABLE_AVAILABILITY -I${PREFIX}/include/onnxruntime/core/session"
+    - export CXXFLAGS="${CXXFLAGS} -D_LIBCPP_DISABLE_AVAILABILITY -I${PREFIX}/include/onnxruntime/core/session $(for h in $(find ${PREFIX}/include -name coreml_provider_factory.h); do printf -- '-I%s ' $(dirname $h); done)"
     - export CMAKE_BUILD_PARALLEL_LEVEL=${CPU_COUNT}
     - ${{ PYTHON }} -m pip install . -vv --no-build-isolation --no-deps
 

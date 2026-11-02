@@ -1,5 +1,5 @@
-# Builds the conda packages in recipes/ for every platform and (on main, if the
-# ANACONDA_API_TOKEN secret exists) uploads them to anaconda.org/tobiasrobotics.
+# Builds the conda packages in recipes/ for every platform and (on main, with
+# GitHub OIDC trusted publishing) uploads them to prefix.dev/tobias-fischer/reefshape.
 name: build
 
 on:
@@ -14,6 +14,9 @@ concurrency:
 
 env:
   RATTLER_BUILD_VERSION: v0.80.0
+  # the channel, as prefix.dev names it for uploads and as pixi/rattler-build take it as a URL
+  CHANNEL: tobias-fischer/reefshape
+  CHANNEL_URL: https://prefix.dev/tobias-fischer/reefshape
   # Everything that is not noarch is built per platform; noarch packages
   # (vcglib, portable-file-dialogs: needed by OpenMVS everywhere) are built in
   # each job and de-duplicated by file name when uploading.
@@ -84,7 +87,7 @@ jobs:
           args=()
           for r in $(eval echo "$RECIPES"); do args+=(-r "recipes/$r"); done
           rattler-build build "${args[@]}" \
-            --skip-existing all -c conda-forge -c tobiasrobotics \
+            --skip-existing all -c conda-forge -c $CHANNEL_URL \
             -m conda_build_config.yaml --output-dir "$OUT" \
             --color-build-log --continue-on-failure
 
@@ -93,10 +96,10 @@ jobs:
         if: matrix.metal
         run: |
           rattler-build build -r recipes/colmap-metal \
-            --skip-existing all -c conda-forge -c tobiasrobotics \
+            --skip-existing all -c conda-forge -c $CHANNEL_URL \
             -m conda_build_config.yaml -m recipes/colmap-metal/variant.yaml --output-dir "$OUT"
           rattler-build build -r recipes/pycolmap-metal \
-            --skip-existing all -c conda-forge -c tobiasrobotics \
+            --skip-existing all -c conda-forge -c $CHANNEL_URL \
             -m conda_build_config.yaml -m recipes/pycolmap-metal/python.yaml \
             -m recipes/pycolmap-metal/variant.yaml --output-dir "$OUT"
 
@@ -111,23 +114,23 @@ jobs:
           retention-days: 14
 
   upload:
-    name: upload to anaconda.org
+    name: upload to prefix.dev
     needs: build
     # upload whatever was built, even if one platform failed
     if: ${{ !cancelled() && github.event_name != 'pull_request' }}
     runs-on: ubuntu-latest
-    env:
-      ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
+    permissions:
+      contents: read
+      id-token: write   # trusted publishing: prefix.dev accepts this workflow's OIDC token
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
           pattern: packages-*
           path: artifacts
-      - name: Upload (skips existing files, never overwrites)
+      - name: Install rattler-build
         run: |
-          if [ -z "$ANACONDA_API_TOKEN" ]; then
-            echo "::notice::ANACONDA_API_TOKEN is not set: nothing uploaded (see README)."
-            exit 0
-          fi
-          bash scripts/upload.sh artifacts
+          curl -fsSL -o rattler-build "https://github.com/prefix-dev/rattler-build/releases/download/$RATTLER_BUILD_VERSION/rattler-build-x86_64-unknown-linux-musl"
+          chmod +x rattler-build; sudo mv rattler-build /usr/local/bin/
+      - name: Upload (skips existing files, never overwrites)
+        run: bash scripts/upload.sh artifacts "$CHANNEL"

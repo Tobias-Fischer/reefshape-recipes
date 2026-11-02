@@ -11,6 +11,11 @@ if [[ "$target_platform" == "osx-arm64" ]]; then
   # the onnxruntime-cpp conda package installs it nested under core/session/,
   # unlike upstream's flat prebuilt onnxruntime release tarball layout.
   CXXFLAGS="${CXXFLAGS} -I${PREFIX}/include/onnxruntime/core/session"
+  # newer onnxruntime-cpp builds keep coreml_provider_factory.h elsewhere: add its directory too
+  for h in $(find "${PREFIX}/include" -name coreml_provider_factory.h); do
+    echo "coreml_provider_factory.h: $h"
+    CXXFLAGS="${CXXFLAGS} -I$(dirname "$h")"
+  done
 fi
 
 if [[ ! -z "${cuda_compiler_version+x}" && "${cuda_compiler_version}" != "None" ]]
