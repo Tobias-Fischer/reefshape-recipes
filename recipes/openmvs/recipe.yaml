@@ -57,7 +57,7 @@ source:
     # OpenMVSViewer: generic Viewer names clash, e.g. embree's bin/viewer); fix
     # the desktop entry's Exec path (not upstream yet)
     - patches/0013-Viewer-name-the-installed-icon-and-.reg-after-VIEWER.patch
-    # tobiasrobotics channel only (not in the staged-recipes PR):
+    # reefshape channel only (not in the staged-recipes PR):
     # Metal PatchMatch backend backported from upstream develop (cdcseacave/openMVS#1279)
     - patches/0014-Backport-the-Metal-compute-backend-for-PatchMatch-de.patch
     # protect the reference depth-map from cache ejection in fusion (cdcseacave/openMVS#1321)

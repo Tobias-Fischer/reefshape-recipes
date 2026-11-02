@@ -2,11 +2,12 @@
 
 conda recipes for the packages [ReefShape / ReefMetrics](https://github.com/Tobias-Fischer/reef-metrics)
 needs that conda-forge does not have yet, built for all platforms with GitHub
-Actions and published to the [`tobiasrobotics`](https://anaconda.org/tobiasrobotics)
-channel on anaconda.org. Recipes are for [rattler-build](https://rattler.build).
+Actions and published to the
+[`tobias-fischer/reefshape`](https://prefix.dev/channels/@tobias-fischer/reefshape)
+channel on prefix.dev. Recipes are for [rattler-build](https://rattler.build).
 
 Why: until conda-forge merges them, the ReefShape installers (pixi) take these
-packages from `tobiasrobotics`. Once a recipe is on conda-forge it is removed here.
+packages from the `reefshape` channel. Once a recipe is on conda-forge it is removed here.
 Pending conda-forge submissions:
 
 | Recipe | staged-recipes PR |
@@ -39,33 +40,43 @@ built in every job (OpenMVS needs them) and uploaded once.
 and manually (Actions > build > Run workflow). It builds with
 `rattler-build build --skip-existing all`, so a package already on the channel
 is not rebuilt (bump `build: number` in a recipe, or its version, to publish a
-new one). Uploads happen only from `main`/manual runs, only if the secret below
-exists, with `anaconda upload --skip-existing`: existing files are never
-overwritten. `cloudcompare` (a 2.14 beta) goes to the `dev` label, the rest to `main`.
+new one). Uploads happen only from `main`/manual runs, with
+`rattler-build upload prefix --skip-existing`: existing files are never overwritten.
 Built packages are also kept as workflow artifacts for 14 days.
 
-## One-time setup: the upload token
+## Using the channel
 
-Until the secret exists, the `upload` job says so and does nothing.
+```bash
+pixi workspace channel add --prepend https://prefix.dev/tobias-fischer/reefshape
+pixi add openmvs
+```
 
-1. anaconda.org > Settings > Access: create a token for the `tobiasrobotics`
-   account with the scope `api:write` (allow API write access).
-2. GitHub: this repository > Settings > Secrets and variables > Actions >
-   New repository secret, name `ANACONDA_API_TOKEN`, value the token.
-3. Re-run the latest workflow run on `main` (or run it manually).
+In `pixi.toml`: `channels = ["https://prefix.dev/tobias-fischer/reefshape", "conda-forge"]`.
+(Use this URL, not the website's `/channels/@...` route.)
+
+## Publishing: trusted publishing, no secret
+
+The workflow file `.github/workflows/build.yml` of this repository is a trusted
+publisher of the channel (prefix.dev channel settings > Trusted Publishers:
+GitHub user `Tobias-Fischer`, repository `reefshape-recipes`, workflow
+`build.yml`). The `upload` job has `permissions: id-token: write`, and
+`rattler-build upload prefix` exchanges the job's GitHub OIDC token for upload
+rights: there is no API key or secret to manage. Renaming the workflow file
+breaks publishing. Pull requests never upload.
 
 ## Building locally
 
 ```bash
 pixi exec rattler-build build -r recipes/openmvs -r recipes/vcglib -r recipes/portable-file-dialogs \
-  --skip-existing local -c conda-forge -c tobiasrobotics -m conda_build_config.yaml --output-dir out
+  --skip-existing local -c conda-forge -c https://prefix.dev/tobias-fischer/reefshape -m conda_build_config.yaml --output-dir out
 ```
 
 `conda_build_config.yaml` is a snapshot of conda-forge's pinning (matching ABI
 pins). CUDA variants: `CF_CUDA_ENABLED=True`, and on a machine without a GPU
 `CONDA_OVERRIDE_CUDA=13.4`. The Metal recipes take their own variant files, see
 the last steps of the workflow. Upload by hand:
-`anaconda upload --user tobiasrobotics --label main --skip-existing out/*/*.conda`.
+`rattler-build auth login prefix.dev` once, then
+`rattler-build upload prefix --channel tobias-fischer/reefshape --skip-existing out/*/*.conda`.
 
 ## Recipe notes
 

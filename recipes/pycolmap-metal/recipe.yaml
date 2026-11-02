@@ -51,7 +51,7 @@ requirements:
     - black
     - isort
     - libboost-devel
-    # the published Metal colmap (tobiasrobotics channel), static libs + cmake config
+    # the published Metal colmap (reefshape channel), static libs + cmake config
     - colmap ==${{ version }} ${{ colmap_build }}
     - ceres-solver * [build="cpu*"]
     - libfaiss * [build="*_cpu"]
