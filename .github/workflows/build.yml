@@ -22,7 +22,7 @@ env:
   # (vcglib, portable-file-dialogs: needed by OpenMVS everywhere) are built in
   # each job and de-duplicated by file name when uploading.
   # (libcoraline, qhoptim, simsimd: TagLab's Refine border and Train your network; before taglab, which needs them)
-  COMMON: vcglib portable-file-dialogs openmvs py4dgeo qcustomplot dxflib cloudcompare libcoraline simsimd qhoptim
+  COMMON: vcglib portable-file-dialogs openmvs py4dgeo qcustomplot dxflib cloudcompare libcoraline simsimd libcoraline simsimd qhoptim
 
 jobs:
   build:
@@ -33,7 +33,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {name: linux-64,         os: ubuntu-latest,    out: out, recipes: "$COMMON taglab"}
+          - {name: linux-64,         os: ubuntu-latest,    out: out, recipes: "$COMMON qhoptim taglab"}
           - {name: linux-64-cuda,    os: ubuntu-latest,    out: out, recipes: "vcglib portable-file-dialogs openmvs", cuda: true}
           - {name: linux-aarch64,    os: ubuntu-24.04-arm, out: out, recipes: "$COMMON"}
           - {name: osx-arm64,        os: macos-latest,     out: out, recipes: "$COMMON", metal: true}
