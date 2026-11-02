@@ -1,3 +1,0 @@
-# 2.14 is in beta: publish on the dev label until the release
-channel_targets:
-  - conda-forge dev
