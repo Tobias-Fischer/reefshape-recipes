@@ -20,6 +20,10 @@ source:
     - patches/0003-Make-TagLab-usable-from-another-working-directory-em.patch
     - patches/0004-Download-model-weights-on-first-use.patch
     - patches/0005-Conda-packaging-support-taglab_launcher-entry-point-.patch
+    - patches/0006-Coraline-finds-libcoraline-in-the-conda-environment.patch
+    - patches/0007-PySide6-fixes-found-running-the-tools-on-real-images.patch
+    - patches/0008-Colour-augmentation-for-albumentations-2.patch
+    - patches/0009-SAM-on-the-Apple-GPU-MPS.patch
 
 build:
   number: 0
@@ -53,6 +57,13 @@ requirements:
     - segment-anything
     - pyyaml
     - requests
+    # Refine border (ctypes library)
+    - libcoraline
+    # Train your network
+    - qhoptim
+    - albumentations >=2
+    # albucore (albumentations 2.0.8) imports simsimd, which in 7.x is the renamed NumKong without that module
+    - simsimd <7
 
 tests:
   - python:
@@ -77,7 +88,7 @@ about:
     TagLab (CNR-ISTI Visual Computing Lab) for the semi-automatic annotation of coral reef
     orthomosaics, with colony tracking across surveys. Built on PySide6 (Qt 6). Network weights
     are downloaded on first use into a user data folder (or $TAGLAB_MODELS). Optional, loaded
-    only when used: ultralytics, qhoptim, albumentations (network training), selenium,
+    only when used: ultralytics, selenium,
     webdriver-manager, beautifulsoup4 (CoralNet toolbox).
   license: GPL-3.0-or-later
   license_file: LICENSE

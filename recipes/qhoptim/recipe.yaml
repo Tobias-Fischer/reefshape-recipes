@@ -1,0 +1,60 @@
+schema_version: 1
+
+context:
+  version: 1.1.0
+
+package:
+  name: qhoptim
+  version: ${{ version }}
+
+source:
+  url: https://pypi.org/packages/source/q/qhoptim/qhoptim-${{ version }}.tar.gz
+  sha256: e8578e2465d25f1c423a66d329a2c85b6bdfeae14cb95df183734ba0227fb1ca
+
+build:
+  number: 0
+  noarch: python
+  script: ${{ PYTHON }} -m pip install . -vv --no-deps --no-build-isolation
+
+requirements:
+  host:
+    - python ${{ python_min }}.*
+    - setuptools
+    - pip
+  run:
+    - python >=${{ python_min }}
+    # the PyTorch optimizers (qhoptim.pyt); the TensorFlow ones (qhoptim.tf) need tensorflow, not required
+    - pytorch
+
+tests:
+  - python:
+      imports:
+        - qhoptim
+        - qhoptim.pyt
+        - qhoptim.common
+      pip_check: true
+      python_version:
+        - ${{ python_min }}.*
+        - "*"
+  - script:
+      - python test_qhoptim.py
+    requirements:
+      run:
+        - python ${{ python_min }}.*
+    files:
+      recipe:
+        - test_qhoptim.py
+
+about:
+  homepage: https://github.com/facebookresearch/qhoptim
+  summary: Quasi-hyperbolic momentum (QHM) and QHAdam optimizers for PyTorch and TensorFlow
+  description: |
+    PyTorch (and TensorFlow) implementations of the quasi-hyperbolic optimization algorithms QHM and QHAdam
+    (Ma and Yarats, "Quasi-hyperbolic momentum and Adam for deep learning", ICLR 2019).
+  license: MIT
+  license_file: LICENSE
+  repository: https://github.com/facebookresearch/qhoptim
+
+extra:
+  recipe-maintainers:
+    - Tobias-Fischer

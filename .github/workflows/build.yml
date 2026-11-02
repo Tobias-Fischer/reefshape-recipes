@@ -21,7 +21,8 @@ env:
   # Everything that is not noarch is built per platform; noarch packages
   # (vcglib, portable-file-dialogs: needed by OpenMVS everywhere) are built in
   # each job and de-duplicated by file name when uploading.
-  COMMON: vcglib portable-file-dialogs openmvs py4dgeo qcustomplot dxflib cloudcompare
+  # (libcoraline, qhoptim, simsimd: TagLab's Refine border and Train your network; before taglab, which needs them)
+  COMMON: vcglib portable-file-dialogs openmvs py4dgeo qcustomplot dxflib cloudcompare libcoraline simsimd qhoptim
 
 jobs:
   build:
