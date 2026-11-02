@@ -1,0 +1,66 @@
+schema_version: 1
+
+context:
+  name: libcoraline
+  version: "2026.4.1"
+  # same TagLab revision as the taglab package
+  rev: d9fc870c79dc661aa2e7fdbe30dd02c047cd6b0b
+
+package:
+  name: ${{ name }}
+  version: ${{ version }}
+
+source:
+  url: https://github.com/cnr-isti-vclab/TagLab/archive/${{ rev }}.tar.gz
+  sha256: a984773c273f00855f662a18bbe5055016263a2a7c1864dae08d2233de33caf2
+
+build:
+  number: 0
+  script:
+    - if: unix
+      then: cp ${RECIPE_DIR}/CMakeLists.txt coraline/
+      else: copy %RECIPE_DIR%\CMakeLists.txt coraline\
+    - cmake ${{ CMAKE_ARGS }} -G Ninja -S coraline -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${{ PREFIX if unix else LIBRARY_PREFIX }}
+    - cmake --build build
+    - cmake --install build
+
+requirements:
+  build:
+    - ${{ compiler('cxx') }}
+    - ${{ stdlib('c') }}
+    - cmake
+    - ninja
+
+tests:
+  - package_contents:
+      files:
+        - if: osx
+          then: lib/libcoraline.dylib
+        - if: linux
+          then: lib/libcoraline.so
+        - if: win
+          then: Library/bin/coraline.dll
+  - script:
+      - python test_load.py
+    requirements:
+      run:
+        - python
+    files:
+      recipe:
+        - test_load.py
+
+about:
+  homepage: https://github.com/cnr-isti-vclab/TagLab/tree/main/coraline
+  summary: Coraline, the graph-cut border refinement library of TagLab
+  description: |
+    Coraline refines the border of a segmentation mask against image edges (and optionally depth) with a
+    Boykov-Kolmogorov max-flow graph cut. It is the "Refine border" tool of TagLab, called from Python
+    with ctypes. The max-flow code (Kolmogorov and Boykov, GPL-3.0-or-later) is vendored in the sources and
+    not available as a conda-forge library.
+  license: GPL-3.0-or-later
+  license_file: LICENSE
+  repository: https://github.com/cnr-isti-vclab/TagLab
+
+extra:
+  recipe-maintainers:
+    - Tobias-Fischer

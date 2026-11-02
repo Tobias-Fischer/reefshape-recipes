@@ -1,0 +1,175 @@
+From 038b982b5d0f07e02c8698a68f0fd343b1b37be4 Mon Sep 17 00:00:00 2001
+From: Tobias Fischer <info@tobiasfischer.info>
+Date: Tue, 3 Nov 2026 05:45:31 +1000
+Subject: [PATCH 2/3] PySide6 fixes found running the tools on real images:
+ QImage pixels without bits().setsize (Refine border, DeepExtreme,
+ classifiers), no argument-less QObject.disconnect (map loading), super()
+ calls that skipped the Qt base class (MapClassifier, Grid, NoteWidget)
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ TagLab.py                   | 10 ++++++----
+ source/ConversionUtils.py   |  7 +++----
+ source/Grid.py              |  6 ++++--
+ source/MapClassifier.py     |  2 +-
+ source/QtImageViewerPlus.py |  2 +-
+ source/genutils.py          | 16 ++++++++++++----
+ source/tools/FourClicks.py  |  5 +----
+ 7 files changed, 28 insertions(+), 20 deletions(-)
+
+diff --git a/TagLab.py b/TagLab.py
+index 74071ed..f118f5e 100644
+--- a/TagLab.py
++++ b/TagLab.py
+@@ -2616,17 +2616,19 @@ class TagLab(QMainWindow):
+         """
+         Update the combobox without changing the source image.
+         """
+-        self.comboboxSourceImage.disconnect()
++        # (QObject.disconnect() without arguments does not exist in PySide6)
++        self.comboboxSourceImage.blockSignals(True)
+         self.comboboxSourceImage.setCurrentIndex(index)
+-        self.comboboxSourceImage.currentIndexChanged.connect(self.sourceImageChanged)
++        self.comboboxSourceImage.blockSignals(False)
+ 
+     def updateComboboxTargetImage(self, index):
+         """
+         Update the combobox without changing the target image.
+         """
+-        self.comboboxTargetImage.disconnect()
++        # (QObject.disconnect() without arguments does not exist in PySide6)
++        self.comboboxTargetImage.blockSignals(True)
+         self.comboboxTargetImage.setCurrentIndex(index)
+-        self.comboboxTargetImage.currentIndexChanged.connect(self.targetImageChanged)
++        self.comboboxTargetImage.blockSignals(False)
+ 
+     def storeCurrentViewsParameters(self):
+         """
+diff --git a/source/ConversionUtils.py b/source/ConversionUtils.py
+index d963fee..908e41d 100644
+--- a/source/ConversionUtils.py
++++ b/source/ConversionUtils.py
+@@ -20,6 +20,8 @@ import numpy as np
+ 
+ from PySide6.QtGui import QImage
+ 
++from source.genutils import qimageBgra
++
+ 
+ def qimage2ndarray(image):
+     w = image.width()
+@@ -29,10 +31,7 @@ def qimage2ndarray(image):
+     arr = np.zeros((h, w, 3), dtype=np.uint8)
+ 
+     if fmt == QImage.Format_RGB32:
+-        bits = image.bits()
+-        bits.setsize(h*w*4)
+-        arrtemp = np.frombuffer(bits, np.uint8).copy()
+-        arrtemp = np.reshape(arrtemp, [h, w, 4])
++        arrtemp = qimageBgra(image)
+         arr[:, :, 0] = arrtemp[:, :, 2]
+         arr[:, :, 1] = arrtemp[:, :, 1]
+         arr[:, :, 2] = arrtemp[:, :, 0]
+diff --git a/source/Grid.py b/source/Grid.py
+index 38ced8b..68d766f 100644
+--- a/source/Grid.py
++++ b/source/Grid.py
+@@ -14,7 +14,9 @@ class MyGText(QGraphicsTextItem):
+     focusOut = Signal()
+ 
+     def __init__(self, parent=None, scene=None):
+-        super(QGraphicsTextItem, self).__init__(parent, scene)
++        super().__init__(parent)
++        if scene is not None:
++            scene.addItem(self)
+ 
+     def focusOutEvent(self, event):
+         self.focusOut.emit()
+@@ -24,7 +26,7 @@ class MyGText(QGraphicsTextItem):
+ class Grid(QObject):
+ 
+     def __init__(self, parent=None):
+-        super(QObject, self).__init__(parent)
++        super().__init__(parent)
+ 
+         self.width = 0
+         self.height = 0
+diff --git a/source/MapClassifier.py b/source/MapClassifier.py
+index bea4311..8ee2fb6 100644
+--- a/source/MapClassifier.py
++++ b/source/MapClassifier.py
+@@ -52,7 +52,7 @@ class MapClassifier(QObject):
+     updateProgress = Signal(float)
+ 
+     def __init__(self, classifier_info, labels_dictionary, parent=None):
+-        super(QObject, self).__init__(parent)
++        super().__init__(parent)
+ 
+         self.classifier_name = classifier_info['Classifier Name']
+         self.nclasses = classifier_info['Num. Classes']
+diff --git a/source/QtImageViewerPlus.py b/source/QtImageViewerPlus.py
+index 64624e5..0adb0fb 100644
+--- a/source/QtImageViewerPlus.py
++++ b/source/QtImageViewerPlus.py
+@@ -78,7 +78,7 @@ class NoteWidget(QPlainTextEdit):
+     editFinishing = Signal()
+ 
+     def __init__(self, parent):
+-        super(QPlainTextEdit, self).__init__(parent)
++        super().__init__(parent)
+ 
+         self.setStyleSheet("background-color: rgb(40,40,40); color: white")
+         self.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
+diff --git a/source/genutils.py b/source/genutils.py
+index 615e37c..e5e4f5b 100644
+--- a/source/genutils.py
++++ b/source/genutils.py
+@@ -620,6 +620,17 @@ def cropQImage(qimage_map, bbox):
+ 
+     return qimage_cropped
+ 
++def qimageBgra(qimg):
++    """The pixels of a QImage as an (h, w, 4) uint8 array in memory order (B, G, R, A on little-endian machines).
++    (PySide6: bits() is a memoryview of the whole buffer, which may have padded rows.)"""
++
++    if qimg.format() not in (QImage.Format_RGB32, QImage.Format_ARGB32, QImage.Format_ARGB32_Premultiplied):
++        qimg = qimg.convertToFormat(QImage.Format_RGB32)
++    w, h = qimg.width(), qimg.height()
++    buf = np.frombuffer(qimg.constBits(), np.uint8)
++    return buf[:h * qimg.bytesPerLine()].reshape(h, qimg.bytesPerLine())[:, :w * 4].reshape(h, w, 4).copy()
++
++
+ def qimageToNumpyArray(qimg):
+ 
+     w = qimg.width()
+@@ -630,10 +641,7 @@ def qimageToNumpyArray(qimg):
+ 
+     arr = np.zeros((h, w, 3), dtype=np.uint8)
+ 
+-    bits = qimg.bits()
+-    bits.setsize(int(h * w * 4))
+-    arrtemp = np.frombuffer(bits, np.uint8).copy()
+-    arrtemp = np.reshape(arrtemp, [h, w, 4])
++    arrtemp = qimageBgra(qimg)
+     arr[:, :, 0] = arrtemp[:, :, 2]
+     arr[:, :, 1] = arrtemp[:, :, 1]
+     arr[:, :, 2] = arrtemp[:, :, 0]
+diff --git a/source/tools/FourClicks.py b/source/tools/FourClicks.py
+index 3322337..8795da4 100644
+--- a/source/tools/FourClicks.py
++++ b/source/tools/FourClicks.py
+@@ -84,10 +84,7 @@ class FourClicks(Tool):
+ 
+         arr = np.zeros((h, w, 3), dtype=np.uint8)
+ 
+-        bits = image_cropped.bits()
+-        bits.setsize(int(h * w * 4))
+-        arrtemp = np.frombuffer(bits, np.uint8).copy()
+-        arrtemp = np.reshape(arrtemp, [h, w, 4])
++        arrtemp = genutils.qimageBgra(image_cropped)
+         arr[:, :, 0] = arrtemp[:, :, 2]
+         arr[:, :, 1] = arrtemp[:, :, 1]
+         arr[:, :, 2] = arrtemp[:, :, 0]
+-- 
+2.53.0
+

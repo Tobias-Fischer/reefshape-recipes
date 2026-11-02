@@ -88,6 +88,9 @@ the last steps of the workflow. Upload by hand:
 | `cloudcompare` | 2.14 with M3C2 / LAS / E57 plugins |
 | `colmap-metal`, `pycolmap-metal` | COLMAP `metal_` build, osx-arm64 only |
 | `taglab` | TagLab (GPL-3.0), noarch, upstream tarball + patches; `smoke.py` starts it offscreen |
+| `libcoraline` | TagLab's Refine border (Coraline graph cut, vendored Boykov-Kolmogorov max-flow, GPL-3.0), shared library loaded with ctypes |
+| `qhoptim` | QHAdam/QHM optimizers (MIT, noarch; PyPI only), for TagLab's Train your network |
+| `simsimd` | 6.5.16, the last release with a `simsimd` module (conda-forge's 7.x is the renamed NumKong without it, which breaks albucore/albumentations 2.0.8); TagLab depends on `simsimd <7` |
 
 Recipes originate from `reef-metrics/packaging/conda-recipes`; this repository
 is now their home. License of the recipes: BSD-3-Clause (the packaged software

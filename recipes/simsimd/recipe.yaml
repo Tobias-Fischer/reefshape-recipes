@@ -1,0 +1,59 @@
+schema_version: 1
+
+context:
+  # the last release under this name: upstream renamed the project NumKong, and conda-forge's simsimd 7.x
+  # is an alias of numkong that has no simsimd module (albucore 0.0.24 / albumentations 2.0.8 need it)
+  version: 6.5.16
+
+package:
+  name: simsimd
+  version: ${{ version }}
+
+source:
+  url: https://pypi.org/packages/source/s/simsimd/simsimd-${{ version }}.tar.gz
+  sha256: 0a005c6e2dacec83f235a747f7dbecca46b5d4d1e183ecc1929ca556ee7d7564
+
+build:
+  number: 0
+  script: ${{ PYTHON }} -m pip install . -vv --no-deps --no-build-isolation
+
+requirements:
+  build:
+    - ${{ compiler('c') }}
+    - ${{ stdlib('c') }}
+    - if: build_platform != target_platform
+      then:
+        - python
+        - cross-python_${{ target_platform }}
+  host:
+    - python
+    - setuptools
+    - wheel
+    - pip
+  run:
+    - python
+
+tests:
+  - python:
+      imports:
+        - simsimd
+      pip_check: true
+  - script:
+      - python test_simsimd.py
+    files:
+      recipe:
+        - test_simsimd.py
+    requirements:
+      run:
+        - numpy
+
+about:
+  homepage: https://github.com/ashvardanian/SimSIMD
+  summary: Portable mixed-precision BLAS-like vector math library for x86 and ARM (the 6.x releases)
+  license: Apache-2.0
+  license_file: LICENSE
+  repository: https://github.com/ashvardanian/SimSIMD
+
+extra:
+  recipe-maintainers:
+    - Tobias-Fischer
