@@ -33,7 +33,7 @@ the owner's fork) are not intended for conda-forge.
 | win-64 CUDA | `windows-latest` | `openmvs` / `pyopenmvs` CUDA |
 
 "Everything" = `vcglib`, `portable-file-dialogs`, `openmvs` (+ `pyopenmvs`),
-`py4dgeo`, `qcustomplot`, `dxflib`, `cloudcompare`, `libcoraline`, `simsimd`. The noarch packages are
+`py4dgeo`, `qcustomplot`, `dxflib`, `cloudcompare`. The noarch packages are
 built in every job (OpenMVS needs them) and uploaded once.
 
 `.github/workflows/build.yml` runs on every push to `main`, on pull requests
