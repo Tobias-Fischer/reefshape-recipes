@@ -279,9 +279,12 @@ outputs:
     tests:
       - script:
           # CUDA builds need the CUDA driver to load (see the openmvs tests)
-          - if: cuda
+          - if: unix and cuda
             then: if ( /sbin/ldconfig -p 2>/dev/null || true ) | grep -q "libcuda.so.1"; then python -c "import pyOpenMVS; print(pyOpenMVS.Scene())"; else echo "no CUDA driver, not importing pyOpenMVS"; fi
-            else: python -c "import pyOpenMVS; print(pyOpenMVS.Scene())"
+          - if: win and cuda
+            then: if exist %SystemRoot%\System32\nvcuda.dll (python -c "import pyOpenMVS; print(pyOpenMVS.Scene())") else (echo no CUDA driver, not importing pyOpenMVS)
+          - if: not cuda
+            then: python -c "import pyOpenMVS; print(pyOpenMVS.Scene())"
       - package_contents:
           files:
             - if: win
