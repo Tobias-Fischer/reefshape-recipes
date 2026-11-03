@@ -38,15 +38,20 @@ jobs:
           - {name: linux-aarch64,    os: ubuntu-24.04-arm, out: out, recipes: "$COMMON"}
           - {name: osx-arm64,        os: macos-latest,     out: out, recipes: "$COMMON", metal: true}
           - {name: osx-64,           os: macos-15-intel,   out: out, recipes: "$COMMON"}
-          - {name: win-64,           os: windows-latest,   out: 'C:/rb', recipes: "$COMMON"}
-          - {name: win-64-cuda,      os: windows-latest,   out: 'C:/rb', recipes: "vcglib portable-file-dialogs openmvs", cuda: true}
+          - {name: win-64,           os: windows-latest,   out: 'D:/rb', recipes: "$COMMON"}
+          - {name: win-64-cuda,      os: windows-latest,   out: 'D:/rb', recipes: "vcglib portable-file-dialogs openmvs", cuda: true}
+    # packages are uploaded from each job as soon as it is done (trusted
+    # publishing: prefix.dev accepts this workflow's OIDC token); pull requests never upload
+    permissions:
+      contents: read
+      id-token: write
     defaults:
       run:
         shell: bash
     env:
       OUT: ${{ matrix.out }}
       RECIPES: ${{ matrix.recipes }}
-      RATTLER_CACHE_DIR: ${{ github.workspace }}/../rattler-cache
+      RATTLER_CACHE_DIR: ${{ runner.os == 'Windows' && 'D:/rattler-cache' || format('{0}/../rattler-cache', github.workspace) }}
     steps:
       - uses: actions/checkout@v7
 
@@ -55,6 +60,21 @@ jobs:
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
           df -h /
+
+      # Faster CI (measured in RoboStack/robostack#154): macOS without Spotlight,
+      # Windows on D: (about 3x the IOPS of C:) without Defender real-time scanning
+      - name: Spotlight off (macOS)
+        if: runner.os == 'macOS'
+        run: sudo mdutil -a -i off || true
+
+      - name: Build on D:, Defender off (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Set-MpPreference -DisableRealtimeMonitoring $true
+          New-Item -ItemType Directory -Force D:\tmp, D:\rb, D:\rattler-cache | Out-Null
+          "TEMP=D:\tmp" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          "TMP=D:\tmp" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
 
       - name: Install rattler-build
         run: |
@@ -74,7 +94,7 @@ jobs:
 
       - uses: actions/cache@v6
         with:
-          path: ${{ github.workspace }}/../rattler-cache
+          path: ${{ env.RATTLER_CACHE_DIR }}
           key: rattler-${{ matrix.name }}-${{ hashFiles('recipes/**', 'conda_build_config.yaml') }}
           restore-keys: rattler-${{ matrix.name }}-
 
@@ -86,9 +106,16 @@ jobs:
           # recipes skip running GPU tools when there is no driver)
           CONDA_OVERRIDE_CUDA: ${{ matrix.cuda && '13.4' || '' }}
         run: |
+          # up to 3 builds at once on Linux/macOS (one jobserver shares the cores);
+          # one at a time on Windows, where parallel builds do not help
+          par=()
+          case "${{ runner.os }}" in
+            Linux)  par=(--parallel-builds "3:$(nproc)");;
+            macOS)  par=(--parallel-builds "3:$(sysctl -n hw.ncpu)");;
+          esac
           args=()
           for r in $(eval echo "$RECIPES"); do args+=(-r "recipes/$r"); done
-          rattler-build build "${args[@]}" \
+          rattler-build build "${args[@]}" "${par[@]}" \
             --skip-existing all -c conda-forge -c $CHANNEL_URL \
             -m conda_build_config.yaml --output-dir "$OUT" \
             --color-build-log --continue-on-failure
@@ -105,6 +132,10 @@ jobs:
             -m conda_build_config.yaml -m recipes/pycolmap-metal/python.yaml \
             -m recipes/pycolmap-metal/variant.yaml --output-dir "$OUT"
 
+      - name: Upload to prefix.dev (skips existing files, never overwrites)
+        if: ${{ !cancelled() && github.event_name != 'pull_request' }}
+        run: bash scripts/upload.sh "$OUT" "$CHANNEL"
+
       - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
@@ -114,25 +145,3 @@ jobs:
             ${{ matrix.out }}/**/*.tar.bz2
           if-no-files-found: warn
           retention-days: 14
-
-  upload:
-    name: upload to prefix.dev
-    needs: build
-    # upload whatever was built, even if one platform failed
-    if: ${{ !cancelled() && github.event_name != 'pull_request' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write   # trusted publishing: prefix.dev accepts this workflow's OIDC token
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: packages-*
-          path: artifacts
-      - name: Install rattler-build
-        run: |
-          curl -fsSL -o rattler-build "https://github.com/prefix-dev/rattler-build/releases/download/$RATTLER_BUILD_VERSION/rattler-build-x86_64-unknown-linux-musl"
-          chmod +x rattler-build; sudo mv rattler-build /usr/local/bin/
-      - name: Upload (skips existing files, never overwrites)
-        run: bash scripts/upload.sh artifacts "$CHANNEL"

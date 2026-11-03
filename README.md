@@ -34,7 +34,7 @@ the owner's fork) are not intended for conda-forge.
 
 "Everything" = `vcglib`, `portable-file-dialogs`, `openmvs` (+ `pyopenmvs`),
 `py4dgeo`, `qcustomplot`, `dxflib`, `cloudcompare`. The noarch packages are
-built in every job (OpenMVS needs them) and uploaded once.
+built in every job (OpenMVS needs them); the first job to upload one wins, the others skip it.
 
 `.github/workflows/build.yml` runs on every push to `main`, on pull requests
 and manually (Actions > build > Run workflow). It builds with
@@ -59,10 +59,13 @@ In `pixi.toml`: `channels = ["https://prefix.dev/tobias-fischer/reefshape", "con
 The workflow file `.github/workflows/build.yml` of this repository is a trusted
 publisher of the channel (prefix.dev channel settings > Trusted Publishers:
 GitHub user `Tobias-Fischer`, repository `reefshape-recipes`, workflow
-`build.yml`). The `upload` job has `permissions: id-token: write`, and
+`build.yml`). The build jobs have `permissions: id-token: write`, and
 `rattler-build upload prefix` exchanges the job's GitHub OIDC token for upload
 rights: there is no API key or secret to manage. Renaming the workflow file
-breaks publishing. Pull requests never upload.
+breaks publishing. Each job uploads its packages as soon as it finishes; pull requests never upload.
+Speed-ups from RoboStack (measured in RoboStack/robostack#154): up to 3 parallel builds on
+Linux/macOS (`--parallel-builds`), Windows builds on `D:` with Defender real-time scanning off,
+Spotlight off on macOS.
 
 ## Building locally
 
