@@ -51,7 +51,7 @@ jobs:
     env:
       OUT: ${{ matrix.out }}
       RECIPES: ${{ matrix.recipes }}
-      RATTLER_CACHE_DIR: ${{ runner.os == 'Windows' && 'D:/rattler-cache' || format('{0}/../rattler-cache', github.workspace) }}
+      RATTLER_CACHE_DIR: ${{ startsWith(matrix.os, 'windows') && 'D:/rattler-cache' || format('{0}/../rattler-cache', github.workspace) }}
     steps:
       - uses: actions/checkout@v7
 
