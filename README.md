@@ -52,7 +52,9 @@ pixi add openmvs
 ```
 
 In `pixi.toml`: `channels = ["https://prefix.dev/tobias-fischer/reefshape", "conda-forge"]`.
-(Use this URL, not the website's `/channels/@...` route.)
+(Use this URL, not the website's `/channels/@...` route.) Keep it **before** conda-forge: with strict
+channel priority the packages of this channel then win over same-named conda-forge ones, e.g. the
+Windows variant of `portable-file-dialogs`, which conda-forge may only have for unix.
 
 ## Publishing: trusted publishing, no secret
 

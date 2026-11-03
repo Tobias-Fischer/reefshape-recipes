@@ -116,7 +116,7 @@ jobs:
           args=()
           for r in $(eval echo "$RECIPES"); do args+=(-r "recipes/$r"); done
           rattler-build build "${args[@]}" "${par[@]}" \
-            --skip-existing all -c conda-forge -c $CHANNEL_URL \
+            --skip-existing all -c $CHANNEL_URL -c conda-forge \
             -m conda_build_config.yaml --output-dir "$OUT" \
             --color-build-log
 
@@ -125,10 +125,10 @@ jobs:
         if: matrix.metal
         run: |
           rattler-build build -r recipes/colmap-metal \
-            --skip-existing all -c conda-forge -c $CHANNEL_URL \
+            --skip-existing all -c $CHANNEL_URL -c conda-forge \
             -m conda_build_config.yaml -m recipes/colmap-metal/variant.yaml --output-dir "$OUT"
           rattler-build build -r recipes/pycolmap-metal \
-            --skip-existing all -c conda-forge -c $CHANNEL_URL \
+            --skip-existing all -c $CHANNEL_URL -c conda-forge \
             -m conda_build_config.yaml -m recipes/pycolmap-metal/python.yaml \
             -m recipes/pycolmap-metal/variant.yaml --output-dir "$OUT"
 
