@@ -106,11 +106,11 @@ jobs:
           # recipes skip running GPU tools when there is no driver)
           CONDA_OVERRIDE_CUDA: ${{ matrix.cuda && '13.4' || '' }}
         run: |
-          # up to 3 builds at once on Linux/macOS (one jobserver shares the cores);
-          # one at a time on Windows, where parallel builds do not help
+          # up to 3 builds at once on macOS (one jobserver shares the cores); one at a time on
+          # Windows (parallel builds do not help there) and on Linux, where the jobserver's
+          # fifo is rejected by the older `make` used by gcc's lto-wrapper (py4dgeo, aarch64)
           par=()
           case "${{ runner.os }}" in
-            Linux)  par=(--parallel-builds "3:$(nproc)");;
             macOS)  par=(--parallel-builds "3:$(sysctl -n hw.ncpu)");;
           esac
           args=()
@@ -118,7 +118,7 @@ jobs:
           rattler-build build "${args[@]}" "${par[@]}" \
             --skip-existing all -c conda-forge -c $CHANNEL_URL \
             -m conda_build_config.yaml --output-dir "$OUT" \
-            --color-build-log --continue-on-failure
+            --color-build-log
 
       # Metal COLMAP (macOS arm64 only): own variant files
       - name: Build colmap and pycolmap with Metal
@@ -133,7 +133,7 @@ jobs:
             -m recipes/pycolmap-metal/variant.yaml --output-dir "$OUT"
 
       - name: Upload to prefix.dev (skips existing files, never overwrites)
-        if: ${{ !cancelled() && github.event_name != 'pull_request' }}
+        if: ${{ success() && github.event_name != 'pull_request' }}
         run: bash scripts/upload.sh "$OUT" "$CHANNEL"
 
       - uses: actions/upload-artifact@v7

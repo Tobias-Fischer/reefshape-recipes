@@ -15,7 +15,11 @@ source:
 
 build:
   number: 0
-  script: ${{ PYTHON }} -m pip install . -vv --no-deps --no-build-isolation
+  script:
+    # -ffast-math pulls in glibc's math-finite.h, which uses lgamma_r (needs _DEFAULT_SOURCE under -std=c11)
+    - if: linux
+      then: export CFLAGS="$CFLAGS -D_DEFAULT_SOURCE"
+    - ${{ PYTHON }} -m pip install . -vv --no-deps --no-build-isolation
 
 requirements:
   build:

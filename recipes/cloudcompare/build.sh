@@ -1,4 +1,9 @@
 #!/bin/bash
+
+if [[ "$target_platform" == osx-* ]]; then
+  # Qt 6 headers use std::filesystem, newer than the osx-64 deployment target (10.13)
+  export CXXFLAGS="${CXXFLAGS} -D_LIBCPP_DISABLE_AVAILABILITY"
+fi
 set -euxo pipefail
 # bundled copies of libraries conda-forge provides (see the patches)
 rm -rf libs/qCC_io/extern/shapelib libs/qCC_io/extern/dxflib qCC/extern/QCustomPlot
