@@ -108,7 +108,9 @@ outputs:
           then:
             - cuda-version ==${{ cuda_compiler_version }}
             - cuda-cudart-dev
-            - cuda-driver-dev
+            # no cuda-driver-dev package on Windows (the driver library comes with cudart-dev there)
+            - if: not win
+              then: cuda-driver-dev
             - libcurand-dev
         - libboost-devel
         - eigen
@@ -242,7 +244,9 @@ outputs:
           then:
             - cuda-version ==${{ cuda_compiler_version }}
             - cuda-cudart-dev
-            - cuda-driver-dev
+            # no cuda-driver-dev package on Windows (the driver library comes with cudart-dev there)
+            - if: not win
+              then: cuda-driver-dev
             - libcurand-dev
         - libboost-devel
         - libboost-python-devel

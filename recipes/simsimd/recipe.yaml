@@ -16,9 +16,10 @@ source:
 build:
   number: 0
   script:
-    # -ffast-math pulls in glibc's math-finite.h, which uses lgamma_r (needs _DEFAULT_SOURCE under -std=c11)
+    # -ffast-math pulls in the old glibc sysroot's math-finite.h, which does not compile with
+    # -std=c11 (implicit lgamma_r); drop the flag (SimSIMD ships its own kernels)
     - if: linux
-      then: export CFLAGS="$CFLAGS -D_DEFAULT_SOURCE"
+      then: sed -i 's/"-ffast-math",//' setup.py
     - ${{ PYTHON }} -m pip install . -vv --no-deps --no-build-isolation
 
 requirements:
