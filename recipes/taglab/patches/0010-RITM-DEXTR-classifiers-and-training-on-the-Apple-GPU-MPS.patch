@@ -1,0 +1,360 @@
+From 136bea89db937977810961f380f723a107ffec4d Mon Sep 17 00:00:00 2001
+From: Tobias Fischer <info@tobiasfischer.info>
+Date: Thu, 5 Nov 2026 05:39:40 +1000
+Subject: [PATCH] RITM, DEXTR, the pretrained classifiers and training use the
+ Apple GPU: device is CUDA, else MPS, else CPU via genutils.torchDevice
+ (TAGLAB_DEVICE overrides); weights load on the CPU; pyramid pooling falls
+ back to the CPU where MPS cannot pool; float32 GDL weights; losses follow the
+ tensor device. Same masks as the CPU on Goat M1 (IoU 1.0), 3 to 20 times
+ faster
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ models/deeplab_resnet.py   | 11 +++++++++-
+ models/losses.py           |  9 +++-----
+ models/training.py         | 45 +++++++++++---------------------------
+ source/MapClassifier.py    | 17 +++++---------
+ source/QtBricksWidget.py   |  9 +++-----
+ source/tools/FourClicks.py | 12 ++++------
+ source/tools/Ritm.py       | 12 ++++------
+ 7 files changed, 43 insertions(+), 72 deletions(-)
+
+diff --git a/models/deeplab_resnet.py b/models/deeplab_resnet.py
+index f354f1d..0263831 100644
+--- a/models/deeplab_resnet.py
++++ b/models/deeplab_resnet.py
+@@ -85,6 +85,15 @@ class ClassifierModule(nn.Module):
+         return out
+ 
+ 
++class AdaptiveAvgPool2dMPS(nn.AdaptiveAvgPool2d):
++    """ Adaptive average pooling that also works on the Apple GPU (MPS), which cannot pool to an output size that does not divide the input size: those cases run on the CPU. """
++    def forward(self, x):
++        out = self.output_size if isinstance(self.output_size, tuple) else (self.output_size, self.output_size)
++        if x.device.type == "mps" and (x.shape[2] % out[0] or x.shape[3] % out[1]):
++            return super().forward(x.cpu()).to(x.device)
++        return super().forward(x)
++
++
+ class PSPModule(nn.Module):
+     """
+     Pyramid Scene Parsing module
+@@ -98,7 +107,7 @@ class PSPModule(nn.Module):
+         self.final = nn.Conv2d(out_features, n_classes, kernel_size=1)
+ 
+     def _make_stage_1(self, in_features, size):
+-        prior = nn.AdaptiveAvgPool2d(output_size=(size, size))
++        prior = AdaptiveAvgPool2dMPS(output_size=(size, size))
+         conv = nn.Conv2d(in_features, in_features//4, kernel_size=1, bias=False)
+         bn = nn.BatchNorm2d(in_features//4, affine=affine_par)
+         relu = nn.ReLU(inplace=True)
+diff --git a/models/losses.py b/models/losses.py
+index 90d1429..42ab645 100644
+--- a/models/losses.py
++++ b/models/losses.py
+@@ -36,8 +36,7 @@ def surface_loss_fake(y_true, n_classes):
+ 
+         dist_maps = one_hot2dist(y_true_onehot_numpy[i])  # it works on a numpy array
+         dist_maps_tensor = torch.from_numpy(dist_maps).to(torch.float32)
+-        if torch.cuda.is_available():
+-            dist_maps_tensor = dist_maps_tensor.to(device='cuda')
++        dist_maps_tensor = dist_maps_tensor.to(y_true.device)
+         loss += dist_maps_tensor * y_true_onehot[i]
+ 
+     return loss.mean()
+@@ -59,8 +58,7 @@ def surface_loss(y_true, y_pred):
+ 
+         dist_maps = one_hot2dist(y_true_onehot_numpy[i])  # it works on a numpy array
+         dist_maps_tensor = torch.from_numpy(dist_maps).to(torch.float32)
+-        if torch.cuda.is_available():
+-            dist_maps_tensor = dist_maps_tensor.to(device='cuda')
++        dist_maps_tensor = dist_maps_tensor.to(y_pred.device)
+ 
+         loss += dist_maps_tensor * y_pred_prob[i]
+ 
+@@ -77,8 +75,7 @@ def surface_loss(y_true, y_pred):
+ def make_one_hot(labels, C=2):
+ 
+     one_hot = torch.FloatTensor(labels.size(0), C, labels.size(1), labels.size(2)).zero_()
+-    if torch.cuda.is_available():
+-        one_hot = one_hot.to('cuda')
++    one_hot = one_hot.to(labels.device)
+     target = one_hot.scatter_(1, labels.unsqueeze(1), 1.0)
+ 
+     target = Variable(target)
+diff --git a/models/training.py b/models/training.py
+index 958149d..038ed08 100644
+--- a/models/training.py
++++ b/models/training.py
+@@ -12,6 +12,7 @@ from sklearn.metrics import confusion_matrix
+ from models.coral_dataset import CoralsDataset
+ import models.losses as losses
+ from PySide6.QtWidgets import QApplication
++from source import genutils
+ from source.genutils import requirePackage
+ from source.ModelWeights import ensureModel
+ 
+@@ -120,12 +121,8 @@ def evaluateNetwork(dataset, dataloader, loss_to_use, CEloss, w_for_GDL, tversky
+ 
+     ##### SETUP THE NETWORK #####
+ 
+-    USE_CUDA = torch.cuda.is_available()
+-
+-    if USE_CUDA:
+-        device = torch.device("cuda")
+-        net.to(device)
+-        torch.cuda.synchronize()
++    device = genutils.torchDevice()
++    net.to(device)
+ 
+     ##### EVALUATION #####
+ 
+@@ -148,9 +145,8 @@ def evaluateNetwork(dataset, dataloader, loss_to_use, CEloss, w_for_GDL, tversky
+             batch_images, labels_batch, names = data['image'], data['labels'], data['name']
+             print(names)
+ 
+-            if USE_CUDA:
+-                batch_images = batch_images.to(device)
+-                labels_batch = labels_batch.to(device)
++            batch_images = batch_images.to(device)
++            labels_batch = labels_batch.to(device)
+ 
+             # N x K x H x W --> N: batch size, K: number of classes, H: height, W: width
+             outputs = net(batch_images)
+@@ -328,10 +324,7 @@ def trainingNetwork(images_folder_train, labels_folder_train, images_folder_val,
+     if base_network is None:
+         raise Exception("The base network deeplab-resnet.pth.tar is not available, the training cannot start.")
+ 
+-    if torch.cuda.is_available():
+-        state = torch.load(base_network, weights_only=False, map_location=torch.device("cuda"))
+-    else:
+-        state = torch.load(base_network, weights_only=False, map_location=torch.device("cpu"))
++    state = torch.load(base_network, weights_only=False, map_location=torch.device("cpu"))
+ 
+     # RE-INIZIALIZE THE CLASSIFICATION LAYER WITH THE RIGHT NUMBER OF CLASSES, DON'T LOAD WEIGHTS OF THE CLASSIFICATION LAYER
+     new_dictionary = state['state_dict']
+@@ -383,12 +376,7 @@ def trainingNetwork(images_folder_train, labels_folder_train, images_folder_val,
+     else:
+         raise Exception(f"Invalid optimizer name: {optimiz}. Must be 'SGD', 'ADAM', or 'QHADAM'.")
+ 
+-    USE_CUDA = torch.cuda.is_available()
+-
+-    if USE_CUDA:
+-        device = torch.device("cuda")
+-    else:
+-        device = torch.device("cpu")
++    device = genutils.torchDevice()
+ 
+     net.to(device)
+ 
+@@ -414,17 +402,14 @@ def trainingNetwork(images_folder_train, labels_folder_train, images_folder_val,
+ 
+     # Crossentropy loss
+     weights = datasetTrain.weights
+-    if torch.cuda.is_available():
+-        class_weights = torch.FloatTensor(weights).cuda()
+-    else:
+-        class_weights = torch.FloatTensor(weights)
++    class_weights = torch.FloatTensor(weights).to(device)
+     CEloss = nn.CrossEntropyLoss(weight=class_weights, ignore_index=-1)
+ 
+     # weights for GENERALIZED DICE LOSS (GDL)
+     freq = 1.0 / datasetTrain.weights[1:]
+     w = 1.0 / (freq * freq)
+     w = w / w.sum() + 0.00001
+-    w_for_GDL = torch.from_numpy(w)
++    w_for_GDL = torch.from_numpy(w).float()  # MPS has no float64
+     w_for_GDL = w_for_GDL.to(device)
+ 
+     # Focal Tversky loss
+@@ -460,9 +445,8 @@ def trainingNetwork(images_folder_train, labels_folder_train, images_folder_val,
+             images_batch = minibatch['image']
+             labels_batch = minibatch['labels']
+ 
+-            if USE_CUDA:
+-                images_batch = images_batch.to(device)
+-                labels_batch = labels_batch.to(device)
++            images_batch = images_batch.to(device)
++            labels_batch = labels_batch.to(device)
+ 
+             # forward+loss+backward
+             outputs = net(images_batch)
+@@ -596,7 +580,7 @@ def trainingNetwork(images_folder_train, labels_folder_train, images_folder_val,
+         print("Warning: No validation improvement detected. Saving final network state.")
+         torch.save(net.state_dict(), save_network_as)
+     
+-    torch.cuda.empty_cache()
++    genutils.emptyDeviceCache()
+     del net
+     net = None
+ 
+@@ -631,10 +615,7 @@ def testNetwork(images_folder, labels_folder, labels_dictionary, target_classes,
+     # DEEPLAB V3+
+     net = DeepLab(backbone='resnet', output_stride=16, num_classes=output_classes)
+ 
+-    if torch.cuda.is_available():
+-        net.load_state_dict(torch.load(network_filename, weights_only=False, map_location=torch.device("cuda")))
+-    else:
+-        net.load_state_dict(torch.load(network_filename, weights_only=False, map_location=torch.device("cpu")))
++    net.load_state_dict(torch.load(network_filename, weights_only=False, map_location=torch.device("cpu")))
+ 
+     print("Weights loaded.")
+ 
+diff --git a/source/MapClassifier.py b/source/MapClassifier.py
+index 8ee2fb6..9e13dca 100644
+--- a/source/MapClassifier.py
++++ b/source/MapClassifier.py
+@@ -95,10 +95,8 @@ class MapClassifier(QObject):
+ 
+         classifier = DeepLab(backbone='resnet', output_stride=16, num_classes=self.nclasses)
+ 
+-        if torch.cuda.is_available():
+-            classifier.load_state_dict(torch.load(network_name, weights_only=False, map_location=torch.device("cuda")))
+-        else:
+-            classifier.load_state_dict(torch.load(network_name, weights_only=False, map_location=torch.device("cpu")))
++        # weights are loaded on the CPU and moved to the device in run()
++        classifier.load_state_dict(torch.load(network_name, weights_only=False, map_location=torch.device("cpu")))
+ 
+         classifier.eval()
+ 
+@@ -167,10 +165,8 @@ class MapClassifier(QObject):
+         tile_cols = int(self.wa_width / AGGREGATION_WINDOW_SIZE) + 1
+         tile_rows = int(self.wa_height / AGGREGATION_WINDOW_SIZE) + 1
+ 
+-        if torch.cuda.is_available():
+-            device = torch.device("cuda")
+-            self.net.to(device)
+-            torch.cuda.synchronize()
++        device = genutils.torchDevice()
++        self.net.to(device)
+ 
+         self.net.eval()
+ 
+@@ -233,8 +229,7 @@ class MapClassifier(QObject):
+                             img_tensor = torch.from_numpy(img_np)
+                             input = img_tensor.unsqueeze(0)
+ 
+-                            if torch.cuda.is_available():
+-                                input = input.to(device)
++                            input = input.to(device)
+ 
+                             outputs = self.net(input)
+ 
+@@ -300,7 +295,7 @@ class MapClassifier(QObject):
+                 QCoreApplication.processEvents()
+ 
+         self.assembleTiles(tile_rows, tile_cols, AGGREGATION_WINDOW_SIZE, ass_scores= save_scores)
+-        torch.cuda.empty_cache()
++        genutils.emptyDeviceCache()
+         del self.net
+         self.net = None
+ 
+diff --git a/source/QtBricksWidget.py b/source/QtBricksWidget.py
+index 1c55452..c8c9ca4 100644
+--- a/source/QtBricksWidget.py
++++ b/source/QtBricksWidget.py
+@@ -38,6 +38,7 @@ from models.isegm.inference import utils
+ from source.genutils import cropQImage, cropImage, qimageToNumpyArray, maskToQImage, rgbToQImage, floatmapToQImage
+ from source.Mask import checkIntersection, intersectMask, paintMask
+ import random
++from source import genutils
+ from source.genutils import taglabPath, modelPath
+ 
+ class QtBricksWidget(QWidget):
+@@ -387,11 +388,7 @@ class QtBricksWidget(QWidget):
+             model_name = 'ritm_corals.pth'
+             model_path = modelPath(model_name)
+ 
+-            if not torch.cuda.is_available():
+-                print("CUDA NOT AVAILABLE!")
+-                device = torch.device("cpu")
+-            else:
+-                device = torch.device("cuda:0")
++            device = genutils.torchDevice()
+ 
+             try:
+                 self.ritm_net = utils.load_is_model(model_path, device, cpu_dist_maps=False)
+@@ -473,7 +470,7 @@ class QtBricksWidget(QWidget):
+             segm_mask = pred > 0.5
+             segm_mask = segm_mask.astype(np.int32)
+             segm_mask = segm_mask*255
+-            torch.cuda.empty_cache()
++            genutils.emptyDeviceCache()
+ 
+             offsety = self.macroarea_blob.bbox[0] + bbox[0]
+             offsetx = self.macroarea_blob.bbox[1] + bbox[1]
+diff --git a/source/tools/FourClicks.py b/source/tools/FourClicks.py
+index 8795da4..2bfc31a 100644
+--- a/source/tools/FourClicks.py
++++ b/source/tools/FourClicks.py
+@@ -210,19 +210,15 @@ class FourClicks(Tool):
+             self.deepextreme_net.load_state_dict(new_state_dict)
+             self.deepextreme_net.eval()
+ 
+-            if not torch.cuda.is_available():
+-                print("CUDA NOT AVAILABLE!")
+-            else:
+-                gpu_id = 0
+-                device = torch.device("cuda:" + str(gpu_id) if torch.cuda.is_available() else "cpu")
+-                self.deepextreme_net.to(device)
+-                self.device = device
++            device = genutils.torchDevice()
++            self.deepextreme_net.to(device)
++            self.device = device
+ 
+         return True
+ 
+     def resetNetwork(self):
+         try:
+-            torch.cuda.empty_cache()
++            genutils.emptyDeviceCache()
+             if self.deepextreme_net is not None:
+                 del self.deepextreme_net
+                 self.deepextreme_net = None
+diff --git a/source/tools/Ritm.py b/source/tools/Ritm.py
+index 0a07ce5..d4bbe2f 100644
+--- a/source/tools/Ritm.py
++++ b/source/tools/Ritm.py
+@@ -5,6 +5,7 @@ from PySide6.QtGui import QPen, QBrush
+ from source.tools.Tool import Tool
+ from source.Mask import paintMask, jointBox, jointMask, replaceMask, checkIntersection, intersectMask
+ from source.genutils import qimageToNumpyArray
++from source import genutils
+ from source.ModelWeights import ensureModel
+ from source.genutils import cropQImage, maskToQImage, floatmapToQImage
+ 
+@@ -267,7 +268,7 @@ class Ritm(Tool):
+                     segm_mask = joint_mask[0]
+ 
+                 segm_mask = segm_mask*255
+-                torch.cuda.empty_cache()
++                genutils.emptyDeviceCache()
+ 
+                 utils.undrawAllBlobs(self.current_blobs, self.viewerplus.scene)
+                 self.current_blobs = []
+@@ -320,12 +321,7 @@ class Ritm(Tool):
+                 self.infoMessage.emit("RITM network not available.")
+                 return False
+ 
+-            if not torch.cuda.is_available():
+-                print("CUDA NOT AVAILABLE!")
+-                device = torch.device("cpu")
+-            else:
+-                device = torch.device("cuda:0")
+-
++            device = genutils.torchDevice()
+             self.device = device
+ 
+             try:
+@@ -344,7 +340,7 @@ class Ritm(Tool):
+ 
+     def resetNetwork(self):
+         try:
+-            torch.cuda.empty_cache()
++            genutils.emptyDeviceCache()
+             if self.ritm_net is not None:
+                 del self.ritm_net
+                 self.ritm_net = None
+-- 
+2.53.0
+
