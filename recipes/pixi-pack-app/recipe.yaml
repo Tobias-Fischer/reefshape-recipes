@@ -35,7 +35,12 @@ requirements:
   build:
     - ${{ compiler('rust') }}
     - ${{ compiler('c') }}
+    - ${{ compiler('cxx') }}
     - ${{ stdlib('c') }}
+    # aws-lc-sys' cmake crate compiles with --target=arm64-apple-macosx, so clang looks for an
+    # unprefixed `ld` and would take Xcode's /usr/bin/ld (which rejects conda's libLTO): conda's
+    - if: osx
+      then: cctools
     - cmake
     - make
     - pkg-config
