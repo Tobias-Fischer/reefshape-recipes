@@ -17,6 +17,12 @@ Pending conda-forge submissions:
 | `cloudcompare` (+ `qcustomplot`, `dxflib`) | [#35422](https://github.com/conda-forge/staged-recipes/pull/35422) |
 | `taglab` | [#35457](https://github.com/conda-forge/staged-recipes/pull/35457) |
 
+`pixi-pack-app` is pixi-pack from the owner's fork with `--create-app` (macOS app, Windows
+installer, Flatpak; upstream [Quantco/pixi-pack#358](https://github.com/Quantco/pixi-pack/pull/358),
+still a draft, so no pixi-pack release has it) plus `pixi-launcher` and `pixi-unpack`; the
+ReefShape App workflow installs it from this channel instead of compiling it. Built for
+linux-64, osx-arm64, osx-64 and win-64 only. Bump `rev` and `build: number` together.
+
 `colmap-metal` and `pycolmap-metal` (COLMAP with a Metal PatchMatch backend,
 the owner's fork) are not intended for conda-forge.
 
