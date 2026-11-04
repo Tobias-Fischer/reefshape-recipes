@@ -23,6 +23,8 @@ env:
   # each job and de-duplicated by file name when uploading.
   # (libcoraline, qhoptim, simsimd: TagLab's Refine border and Train your network; before taglab, which needs them)
   COMMON: vcglib portable-file-dialogs openmvs py4dgeo qcustomplot dxflib cloudcompare libcoraline simsimd qhoptim
+  # pixi-pack with --create-app (the App workflow of reef-metrics installs it): only where that builds installers
+  APP: pixi-pack-app
 
 jobs:
   build:
@@ -33,12 +35,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {name: linux-64,         os: ubuntu-latest,    out: out, recipes: "$COMMON taglab"}
+          - {name: linux-64,         os: ubuntu-latest,    out: out, recipes: "$COMMON taglab $APP"}
           - {name: linux-64-cuda,    os: ubuntu-latest,    out: out, recipes: "vcglib portable-file-dialogs openmvs", cuda: true}
           - {name: linux-aarch64,    os: ubuntu-24.04-arm, out: out, recipes: "$COMMON"}
-          - {name: osx-arm64,        os: macos-latest,     out: out, recipes: "$COMMON", metal: true}
-          - {name: osx-64,           os: macos-15-intel,   out: out, recipes: "$COMMON"}
-          - {name: win-64,           os: windows-latest,   out: 'D:/rb', recipes: "$COMMON"}
+          - {name: osx-arm64,        os: macos-latest,     out: out, recipes: "$COMMON $APP", metal: true}
+          - {name: osx-64,           os: macos-15-intel,   out: out, recipes: "$COMMON $APP"}
+          - {name: win-64,           os: windows-latest,   out: 'D:/rb', recipes: "$COMMON $APP"}
           - {name: win-64-cuda,      os: windows-latest,   out: 'D:/rb', recipes: "vcglib portable-file-dialogs openmvs", cuda: true}
     # packages are uploaded from each job as soon as it is done (trusted
     # publishing: prefix.dev accepts this workflow's OIDC token); pull requests never upload
