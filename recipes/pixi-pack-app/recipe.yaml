@@ -23,6 +23,11 @@ build:
       AWS_LC_SYS_CMAKE_BUILDER: "1"
       CARGO_PROFILE_RELEASE_STRIP: symbols
     content:
+      - if: osx
+        then:
+          # the cmake crate points CMake at Xcode's SDK, where conda's clang cannot link its test
+          # program (ld: -lto_library library filename must be 'libLTO.dylib'): use the cc builder
+          - export AWS_LC_SYS_CMAKE_BUILDER=0
       - if: unix
         then:
           - export OPENSSL_DIR=$PREFIX
