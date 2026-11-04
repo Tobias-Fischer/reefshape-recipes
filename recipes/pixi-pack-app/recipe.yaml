@@ -1,0 +1,61 @@
+schema_version: 1
+
+context:
+  # the owner's fork of Quantco/pixi-pack (branch feat/macos-app-launcher, upstream PR #358, still a draft):
+  # `pixi-pack --create-app` (macOS app, Windows installer, Flatpak) + pixi-launcher + pixi-unpack.
+  # No released pixi-pack has these (0.7.12: only pack/unpack). Bump rev AND build: number together.
+  version: 0.7.11
+  rev: c7a4fc1a7483fb58681e15a76de5067173b65c4a
+
+package:
+  name: pixi-pack-app
+  version: ${{ version }}
+
+source:
+  git: https://github.com/Tobias-Fischer/pixi-pack
+  rev: ${{ rev }}
+
+build:
+  number: 0
+  script:
+    env:
+      # conda's CFLAGS inject -O2, which breaks aws-lc-sys' jitterentropy; build it with cmake (as conda-forge's pixi-pack)
+      AWS_LC_SYS_CMAKE_BUILDER: "1"
+      CARGO_PROFILE_RELEASE_STRIP: symbols
+    content:
+      - if: unix
+        then:
+          - export OPENSSL_DIR=$PREFIX
+          - cargo install --locked --no-track --features app --root $PREFIX --path .
+      - if: win
+        then:
+          - cargo install --locked --no-track --features app --root %LIBRARY_PREFIX% --path .
+
+requirements:
+  build:
+    - ${{ compiler('rust') }}
+    - ${{ compiler('c') }}
+    - ${{ stdlib('c') }}
+    - cmake
+    - make
+    - pkg-config
+  host:
+    - if: linux
+      then: openssl
+
+tests:
+  - script:
+      - pixi-pack --help
+      - pixi-unpack --help
+      - pixi-launcher --help
+
+about:
+  homepage: https://github.com/Tobias-Fischer/pixi-pack
+  repository: https://github.com/Tobias-Fischer/pixi-pack
+  summary: pixi-pack with `--create-app` (apps from pixi environments) and pixi-launcher, pixi-unpack, from a fork
+  license: BSD-3-Clause
+  license_file: LICENSE
+
+extra:
+  recipe-maintainers:
+    - Tobias-Fischer
