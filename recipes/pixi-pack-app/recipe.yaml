@@ -51,8 +51,12 @@ requirements:
 tests:
   - script:
       - pixi-pack --help
+      - pixi-pack --help | grep -- --create-app
       - pixi-unpack --help
-      - pixi-launcher --help
+  # pixi-launcher has no --help: it starts the app configured next to it
+  - package_contents:
+      bin:
+        - pixi-launcher
 
 about:
   homepage: https://github.com/Tobias-Fischer/pixi-pack
