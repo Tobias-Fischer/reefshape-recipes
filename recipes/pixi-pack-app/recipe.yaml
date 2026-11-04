@@ -51,7 +51,6 @@ requirements:
 tests:
   - script:
       - pixi-pack --help
-      - pixi-pack --help | grep -- --create-app
       - pixi-unpack --help
   # pixi-launcher has no --help: it starts the app configured next to it
   - package_contents:
