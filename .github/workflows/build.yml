@@ -14,10 +14,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  RATTLER_BUILD_VERSION: v0.80.0
-  # the channel, as prefix.dev names it for uploads and as pixi/rattler-build take it as a URL
+  # the channel, as prefix.dev names it for uploads (rattler-build's version: pixi.toml / pixi.lock)
   CHANNEL: tobias-fischer/reefshape
-  CHANNEL_URL: https://prefix.dev/tobias-fischer/reefshape
   # Everything that is not noarch is built per platform; noarch packages are
   # built in each job that lists them and de-duplicated by file name when uploading.
   # (libcoraline, qhoptim, simsimd: TagLab's Refine border and Train your network; before taglab, which needs them)
@@ -75,21 +73,9 @@ jobs:
           "TEMP=D:\tmp" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
           "TMP=D:\tmp" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
 
-      - name: Install rattler-build
-        run: |
-          case "${{ runner.os }}-${{ runner.arch }}" in
-            Linux-X64)   t=x86_64-unknown-linux-musl; e=;;
-            Linux-ARM64) t=aarch64-unknown-linux-musl; e=;;
-            macOS-ARM64) t=aarch64-apple-darwin; e=;;
-            macOS-X64)   t=x86_64-apple-darwin; e=;;
-            Windows-X64) t=x86_64-pc-windows-msvc; e=.exe;;
-          esac
-          mkdir -p "$HOME/bin"
-          curl -fsSL -o "$HOME/bin/rattler-build$e" \
-            "https://github.com/prefix-dev/rattler-build/releases/download/$RATTLER_BUILD_VERSION/rattler-build-$t$e"
-          chmod +x "$HOME/bin/rattler-build$e"
-          echo "$HOME/bin" >> "$GITHUB_PATH"
-          "$HOME/bin/rattler-build$e" --version
+      - uses: prefix-dev/setup-pixi@v0.11.2
+        with:
+          pixi-version: v0.83.0
 
       - uses: actions/cache@v6
         with:
@@ -108,26 +94,19 @@ jobs:
           esac
           args=()
           for r in $(eval echo "$RECIPES"); do args+=(-r "recipes/$r"); done
-          rattler-build build "${args[@]}" "${par[@]}" \
-            --skip-existing all -c $CHANNEL_URL -c conda-forge \
-            -m conda_build_config.yaml --output-dir "$OUT" \
-            --color-build-log
+          pixi run build "${args[@]}" "${par[@]}" --output-dir "$OUT" --color-build-log
 
       # Metal COLMAP (macOS arm64 only): own variant files
       - name: Build colmap and pycolmap with Metal
         if: matrix.metal
         run: |
-          rattler-build build -r recipes/colmap-metal \
-            --skip-existing all -c $CHANNEL_URL -c conda-forge \
-            -m conda_build_config.yaml -m recipes/colmap-metal/variant.yaml --output-dir "$OUT"
-          rattler-build build -r recipes/pycolmap-metal \
-            --skip-existing all -c $CHANNEL_URL -c conda-forge \
-            -m conda_build_config.yaml -m recipes/pycolmap-metal/python.yaml \
+          pixi run build -r recipes/colmap-metal -m recipes/colmap-metal/variant.yaml --output-dir "$OUT"
+          pixi run build -r recipes/pycolmap-metal -m recipes/pycolmap-metal/python.yaml \
             -m recipes/pycolmap-metal/variant.yaml --output-dir "$OUT"
 
       - name: Upload to prefix.dev (skips existing files, never overwrites)
         if: ${{ success() && github.event_name != 'pull_request' }}
-        run: bash scripts/upload.sh "$OUT" "$CHANNEL"
+        run: pixi run upload "$OUT" "$CHANNEL"
 
       - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
