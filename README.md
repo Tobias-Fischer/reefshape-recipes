@@ -20,7 +20,7 @@ Pending conda-forge submissions:
 installer, Flatpak; upstream [Quantco/pixi-pack#358](https://github.com/Quantco/pixi-pack/pull/358),
 still a draft, so no pixi-pack release has it) plus `pixi-launcher` and `pixi-unpack`; the
 ReefShape App workflow installs it from this channel instead of compiling it. Built for
-linux-64, osx-arm64, osx-64 and win-64 only. Bump `rev` and `build: number` together.
+linux-64, linux-aarch64, osx-arm64, osx-64 and win-64. Bump `rev` and `build: number` together.
 
 `colmap-metal` and `pycolmap-metal` (COLMAP with a Metal PatchMatch backend,
 the owner's fork) are not intended for conda-forge.

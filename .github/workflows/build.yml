@@ -22,7 +22,7 @@ env:
   # built in each job that lists them and de-duplicated by file name when uploading.
   # (libcoraline, qhoptim, simsimd: TagLab's Refine border and Train your network; before taglab, which needs them)
   COMMON: py4dgeo qcustomplot dxflib cloudcompare libcoraline simsimd qhoptim
-  # pixi-pack with --create-app (the App workflow of reef-metrics installs it): only where that builds installers
+  # pixi-pack with --create-app (the App workflow of reef-metrics installs it): where it builds installers
   APP: pixi-pack-app
 
 jobs:
@@ -35,7 +35,7 @@ jobs:
       matrix:
         include:
           - {name: linux-64,         os: ubuntu-latest,    out: out, recipes: "$COMMON taglab $APP"}
-          - {name: linux-aarch64,    os: ubuntu-24.04-arm, out: out, recipes: "$COMMON"}
+          - {name: linux-aarch64,    os: ubuntu-24.04-arm, out: out, recipes: "$COMMON $APP"}
           - {name: osx-arm64,        os: macos-latest,     out: out, recipes: "$COMMON $APP", metal: true}
           - {name: osx-64,           os: macos-15-intel,   out: out, recipes: "$COMMON $APP"}
           - {name: win-64,           os: windows-latest,   out: 'D:/rb', recipes: "$COMMON $APP"}
