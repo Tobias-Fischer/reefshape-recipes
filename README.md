@@ -47,6 +47,12 @@ and manually (Actions > build > Run workflow). It builds with
 is not rebuilt (bump `build: number` in a recipe, or its version, to publish a
 new one). Uploads happen only from `main`/manual runs, with
 `rattler-build upload prefix --skip-existing`: existing files are never overwritten.
+**Never delete a package from the channel.** A deleted file name is free again: the next run on
+`main` rebuilds it (skip-existing finds nothing) and uploads a file with the same name but other
+bytes, and every `pixi.lock` that has the old one fails with a hash mismatch (colmap and pycolmap
+for osx-arm64 in November 2026: deleted between two runs, rebuilt by the next merge,
+reef-metrics needed a new lock). To replace a package, bump `build: number`; to retire one, stop
+building it and leave the file.
 Built packages are also kept as workflow artifacts for 14 days.
 
 ## Using the channel
