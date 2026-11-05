@@ -1,0 +1,16 @@
+# The tools that build and upload this channel's packages, the same locally and in CI
+# (.github/workflows/build.yml). `pixi run build -r recipes/NAME --output-dir out`.
+[workspace]
+name = "reefshape-recipes"
+channels = ["conda-forge"]
+platforms = ["linux-64", "linux-aarch64", "osx-arm64", "osx-64", "win-64"]
+
+[dependencies]
+rattler-build = "0.80.*"
+
+[tasks]
+# our channel before conda-forge (strict priority, see README); a package already on the
+# channel is not rebuilt. Add -r recipes/NAME (one or more) and --output-dir.
+build = { cmd = "rattler-build build --skip-existing all -c https://prefix.dev/tobias-fischer/reefshape -c conda-forge -m conda_build_config.yaml", description = "Build recipes (-r recipes/NAME ... --output-dir DIR)" }
+# never overwrites (scripts/upload.sh); in CI trusted publishing, locally `rattler-build auth login prefix.dev`
+upload = { cmd = "bash scripts/upload.sh", description = "Upload the packages under DIR to CHANNEL (DIR CHANNEL)" }

@@ -43,7 +43,8 @@ and no longer built here.
 
 `.github/workflows/build.yml` runs on every push to `main`, on pull requests
 and manually (Actions > build > Run workflow). It builds with
-`rattler-build build --skip-existing all`, so a package already on the channel
+`pixi run build` (`rattler-build build --skip-existing all`, set up by `prefix-dev/setup-pixi`
+from `pixi.toml`), so a package already on the channel
 is not rebuilt (bump `build: number` in a recipe, or its version, to publish a
 new one). Uploads happen only from `main`/manual runs, with
 `rattler-build upload prefix --skip-existing`: existing files are never overwritten.
@@ -77,15 +78,18 @@ Spotlight off on macOS.
 ## Building locally
 
 ```bash
-pixi exec rattler-build build -r recipes/cloudcompare -r recipes/dxflib -r recipes/qcustomplot \
-  --skip-existing local -c conda-forge -c https://prefix.dev/tobias-fischer/reefshape -m conda_build_config.yaml --output-dir out
+pixi run build -r recipes/cloudcompare -r recipes/dxflib -r recipes/qcustomplot --output-dir out
 ```
+
+`pixi.toml` pins rattler-build (and `pixi.lock` its exact build) and holds the `build` and
+`upload` tasks the workflow runs too, so a local build is the CI build: our channel before
+conda-forge, `conda_build_config.yaml`, `--skip-existing all`.
 
 `conda_build_config.yaml` is a snapshot of conda-forge's pinning (matching ABI
 pins). The Metal recipes take their own variant files, see
 the last steps of the workflow. Upload by hand:
 `rattler-build auth login prefix.dev` once, then
-`rattler-build upload prefix --channel tobias-fischer/reefshape --skip-existing out/*/*.conda`.
+`pixi run upload out tobias-fischer/reefshape` (skips files already there).
 
 ## Recipe notes
 
