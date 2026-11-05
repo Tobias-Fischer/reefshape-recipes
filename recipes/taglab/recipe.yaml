@@ -25,9 +25,11 @@ source:
     - patches/0008-Colour-augmentation-for-albumentations-2.patch
     - patches/0009-SAM-on-the-Apple-GPU-MPS.patch
     - patches/0010-RITM-DEXTR-classifiers-and-training-on-the-Apple-GPU-MPS.patch
+    - patches/0011-Automatic-SAM-give-SAM-its-own-1024-px-input-and-map.patch
+    - patches/0012-Automatic-SAM-hint-to-choose-a-larger-work-area-when.patch
 
 build:
-  number: 1
+  number: 2
   noarch: python
   script: python ${{ RECIPE_DIR }}/install_taglab.py
   python:
