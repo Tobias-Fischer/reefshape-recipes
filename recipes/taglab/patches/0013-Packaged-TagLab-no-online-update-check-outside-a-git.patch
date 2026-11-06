@@ -1,0 +1,37 @@
+From 55a11152c67097b7578d9977477b2a43ed9271fe Mon Sep 17 00:00:00 2001
+From: Tobias Fischer <tobias.fischer@qut.edu.au>
+Date: Fri, 6 Nov 2026 14:54:49 +1000
+Subject: [PATCH] Packaged TagLab: no online update check outside a git
+ checkout
+
+A conda (or other) package is updated by its package manager, not by update.py.
+Before, a packaged TagLab quit at start whenever a newer version was online
+("RUN update.py TO UPDATE TAGLAB"), so it could not be started at all.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ TagLab.py | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/TagLab.py b/TagLab.py
+index 7ebcf63..2b717c0 100644
+--- a/TagLab.py
++++ b/TagLab.py
+@@ -171,8 +171,12 @@ class TagLab(QMainWindow):
+         self.setStyleSheet("background-color: rgb(55,55,55); color: white")
+ 
+         # check_updates=False (e.g. when TagLab is embedded in another application) skips the network check, which
+-        # would otherwise quit the whole process if a newer version is online.
+-        current_version, need_to_update = self.checkNewVersion() if check_updates else (self.readOfflineVersion(), False)
++        # would otherwise quit the whole process if a newer version is online. An installation that is not a git
++        # checkout (a conda or other package) is updated by its package manager, not by update.py: no check there
++        # either, so a newer version online never stops it from starting.
++        is_checkout = os.path.isdir(os.path.join(genutils.TAGLAB_DIR, ".git"))
++        current_version, need_to_update = self.checkNewVersion() if check_updates and is_checkout \
++            else (self.readOfflineVersion(), False)
+         if need_to_update:
+             if self.getGitBranch() == 'main':
+                 print("\033[91m" + "*" * 60)
+-- 
+2.53.0
+

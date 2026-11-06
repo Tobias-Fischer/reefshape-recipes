@@ -27,9 +27,10 @@ source:
     - patches/0010-RITM-DEXTR-classifiers-and-training-on-the-Apple-GPU-MPS.patch
     - patches/0011-Automatic-SAM-give-SAM-its-own-1024-px-input-and-map.patch
     - patches/0012-Automatic-SAM-hint-to-choose-a-larger-work-area-when.patch
+    - patches/0013-Packaged-TagLab-no-online-update-check-outside-a-git.patch
 
 build:
-  number: 2
+  number: 3
   noarch: python
   script: python ${{ RECIPE_DIR }}/install_taglab.py
   python:
